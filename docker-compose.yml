@@ -1,0 +1,35 @@
+services:
+
+  backend:
+    build: ./backend
+    container_name: tangent_backend
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+
+  frontend:
+    build: ./frontend
+    container_name: tangent_frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+  db:
+    image: postgres:16
+    container_name: tangent_db
+    env_file:
+      - ./backend/.env
+    volumes:
+      - tangent_postgres_data:/var/lib/postgresql/data
+
+volumes:
+  tangent_postgres_data:
