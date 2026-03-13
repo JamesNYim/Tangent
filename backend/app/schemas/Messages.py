@@ -18,4 +18,4 @@ class MessageOut(BaseModel):
 
 class SendMessageResponse(BaseModel):
     user_message: MessageOut
-    assistant_message: MessageOut
+    ai_message: MessageOut

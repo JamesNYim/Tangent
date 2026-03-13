@@ -11,7 +11,8 @@ from app.api.auth import get_current_user
 router = APIRouter(tags=["messages"])
 
 @router.get("/conversations/{conversation_id}/messages", response_model=list[MessageOut])
-def list_messages(conversation_id: int, db: Session = Depends(get_db), user_id: int = Depends(get_current_user)):
+def list_messages(conversation_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    user_id = current_user["id"]
     query = db.query(Conversation)
     filtered_query = query.filter(Conversation.id == conversation_id, Conversation.user_id == user_id)
     convo = filtered_query.first()
@@ -27,7 +28,8 @@ def list_messages(conversation_id: int, db: Session = Depends(get_db), user_id: 
     return messages
 
 @router.post("/conversations/{conversation_id}/messages", response_model=SendMessageResponse)
-def send_message(conversation_id: int, payload: MessageCreate, db: Session = Depends(get_db), user_id: int = Depends(get_current_user)):
+def send_message(conversation_id: int, payload: MessageCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    user_id = current_user["id"]
     query = db.query(Conversation)
     filtered_query = query.filter(Conversation.id == conversation_id, Conversation.user_id == user_id)
     convo = filtered_query.first()
@@ -45,6 +47,10 @@ def send_message(conversation_id: int, payload: MessageCreate, db: Session = Dep
         role="user",
         content=content,
     )
+    user = db.query(User).filter(User.id == current_user["id"]).first()
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+
     db.add(user_message)
     db.commit()
     db.refresh(user_message)
@@ -55,13 +61,10 @@ def send_message(conversation_id: int, payload: MessageCreate, db: Session = Dep
     ordered_query = filtered_query.order_by(Message.created_at.asc(), Message.id.asc())
     context_messages = ordered_query.all()
 
-    user = db.query(User).filter(User.id == user_id).first()
-    user_api_key = user.api_key if user else None
-
     try:
-        ai_text = generate_ai_reply(
-            context=build_chat_messages(context_messages),
-            user_api_key=user_api_key,
+        ai_text = generate_ai_msg(
+            context=build_chat_msgs(context_messages),
+            user=user
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"AI generation failed: {str(e)}")

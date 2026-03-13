@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.conversations import Conversation
-from app.schema.conversations import ConversationCreate, ConversationOut
+from app.schemas.conversations import ConversationCreate, ConversationOut
 from app.api.auth import get_current_user
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])

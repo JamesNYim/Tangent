@@ -4,15 +4,15 @@ from openai import OpenAI
 DEFAULT_MODEL = os.getenv("OPENAI_MODEL", "gpt-4.1-mini")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 AI_DESCRIPTION = "You are Tangent, a helpful AI assistant."
-
 def resolve_api_key(user):
     if user.api_key:
         return user.api_key
-    return OPENAI_API_KEY
+    return None
+    #return OPENAI_API_KEY
 
 def build_chat_msgs(db_messages):
     formatted = []
-    for msg in db_messages):
+    for msg in db_messages:
         formatted.append({
             "role": msg.role,
             "content": msg.content,
@@ -37,4 +37,4 @@ def generate_ai_msg(context, user) -> str:
         ],
     )
 
-    return response.choices[0].message.content or ""
+    return (response.choices[0].message.content or "")
