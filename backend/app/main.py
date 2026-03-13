@@ -1,23 +1,25 @@
 from fastapi import FastAPI
-from app.api.health import router as health_router
-from app.api.auth import router as auth_router
-from app.api.posts import router as post_router
-from app.db.init_db import init_db
-from app.core.middleware import add_middleware
+from fastapi.middleware.cors import CORSMiddleware
+from .db import Base, engine
+from .routes.conversations import router as conversations_router
+from .routes.messages import router as messages_router
 
-app=FastAPI(title="Backend API")
-add_middleware(app)
+Base.metadata.create_all(bind=engine)
 
-app.include_router(health_router)
-app.include_router(auth_router)
-app.include_router(post_router)
+app = FastAPI(title="Tangent API")
 
-@app.on_event("startup")
-def startup_event():
-    init_db()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.get("/")
-def root():
-    return {"status":"ok"}
+app.include_router(conversations_router)
+app.include_router(messages_router)
 
 
+@app.get("/health")
+def health_check():
+    return {"ok": True}
