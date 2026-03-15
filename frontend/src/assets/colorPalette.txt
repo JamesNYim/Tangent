@@ -1,0 +1,10 @@
+#4c2b12 - Timber Breeze
+#7f5235 - Forest Floor
+#bb8954 - Earthy Drift
+#f5f5d3 - Fern Whisperer
+#798262 - Canopy Green
+#33352c - Deepwood Shade
+
+#2f2220 - Wook Bark
+#3e4d44 - Wet Forest
+#a9b192 - Fern 
