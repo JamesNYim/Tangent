@@ -90,9 +90,14 @@ export default function ChatPage() {
     setError("");
 
     try {
+        let parentMsgId = null
+        if (messages.length > 0) {
+            parentMsgId = messages[messages.length - 1].id;
+        }
+
       const data = await api(`/conversations/${selectedConversationId}/messages`, {
         method: "POST",
-        body: JSON.stringify({ content: trimmed }),
+        body: JSON.stringify({ content: trimmed, parent_msg_id: parentMsgId }),
       });
 
       setMessages((prev) => [...prev, data.user_message, data.ai_message]);

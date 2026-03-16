@@ -3,6 +3,7 @@ from datetime import datetime
 
 class MessageCreate(BaseModel):
     content: str
+    parent_msg_id: int | None = None
 
 
 class MessageOut(BaseModel):

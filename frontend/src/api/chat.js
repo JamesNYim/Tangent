@@ -26,10 +26,10 @@ export async function getMessages(conversationID) {
     return res;
 }
 
-export async function sendMessage(conversationID, content) {
+export async function sendMessage(conversationID, content, parentMsgID) {
     const res = api(`/conversations/${conversationID}/messages`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, parent_msg_id: parentMsgID }),
     });
 }
