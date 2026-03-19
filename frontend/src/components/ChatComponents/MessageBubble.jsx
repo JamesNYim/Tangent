@@ -20,12 +20,17 @@ const styles = {
   },
 };
 
-export default function MessageBubble({ msg }) {
+export default function MessageBubble({ msg, onSelectMessage }) {
   const bubbleStyle =
     msg.role === "user" ? styles.userBubble : styles.assistantBubble;
 
   return (
     <div
+      onClick= {() =>  {
+            onSelectMessage?.(msg.id);
+            console.log("clicked msg: ", msg.id);
+          }
+      }
       style={{
         ...styles.bubble,
         ...bubbleStyle,

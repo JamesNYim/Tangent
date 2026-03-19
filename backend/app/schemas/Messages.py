@@ -12,6 +12,7 @@ class MessageOut(BaseModel):
     role: str
     content: str
     created_at: datetime
+    parent_msg_id: int | None = None
 
     class Config:
         from_attributes = True

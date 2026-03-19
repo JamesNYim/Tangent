@@ -12,10 +12,37 @@ const styles = {
   },
 };
 
+function buildMessagesById(messages) {
+  const map = new Map();
+  for (const msg of messages) {
+    map.set(msg.id, msg);
+  }
+  return map;
+}
+
+function getActivePath(messages, currentNodeId) {
+  if (!currentNodeId) return [];
+
+  const messagesById = buildMessagesById(messages);
+  const path = [];
+
+  let cursor = messagesById.get(currentNodeId);
+
+  while (cursor) {
+    path.push(cursor);
+    cursor = cursor.parent_msg_id
+      ? messagesById.get(cursor.parent_msg_id)
+      : null;
+  }
+
+  return path.reverse();
+}
+
 export default function ChatPage() {
   const [conversations, setConversations] = useState([]);
   const [selectedConversationId, setSelectedConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
+  const [currentNodeId, setCurrentNodeId] = useState(null);
   const [input, setInput] = useState("");
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
@@ -56,9 +83,15 @@ export default function ChatPage() {
     try {
       const data = await api(`/conversations/${conversationId}/messages`);
       setMessages(data);
-    } catch (err) {
+      // pick default node (for now just last message)
+      if (data.length > 0) {
+        setCurrentNodeId(data[data.length - 1].id);
+      }
+    } 
+    catch (err) {
       setError(err.message || "Failed to load messages");
-    } finally {
+    } 
+    finally {
       setLoadingMessages(false);
     }
   }
@@ -75,6 +108,7 @@ export default function ChatPage() {
       setConversations((prev) => [newConversation, ...prev]);
       setSelectedConversationId(newConversation.id);
       setMessages([]);
+      setCurrentNodeId(null);
     } catch (err) {
       setError(err.message || "Failed to create conversation");
     }
@@ -90,10 +124,7 @@ export default function ChatPage() {
     setError("");
 
     try {
-        let parentMsgId = null
-        if (messages.length > 0) {
-            parentMsgId = messages[messages.length - 1].id;
-        }
+      const parentMsgId = currentNodeId;
 
       const data = await api(`/conversations/${selectedConversationId}/messages`, {
         method: "POST",
@@ -101,6 +132,7 @@ export default function ChatPage() {
       });
 
       setMessages((prev) => [...prev, data.user_message, data.ai_message]);
+      setCurrentNodeId(data.ai_message.id);
       setInput("");
 
       setConversations((prev) => {
@@ -136,6 +168,7 @@ export default function ChatPage() {
     };
   }
 
+  const activePath = getActivePath(messages, currentNodeId);
   return (
     <div style={styles.page}>
       <ConversationSidebar
@@ -150,11 +183,12 @@ export default function ChatPage() {
         error={error}
         selectedConversationId={selectedConversationId}
         loadingMessages={loadingMessages}
-        messages={messages}
+        messages={activePath}
         input={input}
         setInput={setInput}
         onSendMessage={handleSendMessage}
         sending={sending}
+        onSelectMessage={setCurrentNodeId}
       />
     </div>
   );
