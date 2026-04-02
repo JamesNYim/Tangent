@@ -47,8 +47,6 @@ def list_messages(conversation_id: int, db: Session = Depends(get_db), current_u
 
 @router.post("/conversations/{conversation_id}/messages", response_model=SendMessageResponse)
 def send_message(conversation_id: int, payload: MessageCreate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
-    print("payload.content =", payload.content)
-    print("payload.parent_msg_id =", payload.parent_msg_id)
 
     user_id = current_user["id"]
     convo = get_conversation_for_user(db, conversation_id, user_id)
@@ -64,9 +62,7 @@ def send_message(conversation_id: int, payload: MessageCreate, db: Session = Dep
     if user is None:
         raise HTTPException(status_code=404, detail="User not found")
 
-
     parent_message = None
-
 
     if payload.parent_msg_id is not None:
         parent_message = (db.query(Message).filter(Message.id == payload.parent_msg_id, Message.conversation_id == conversation_id).first())
@@ -78,11 +74,21 @@ def send_message(conversation_id: int, payload: MessageCreate, db: Session = Dep
         if existing_msg is not None:
             raise HTTPException(status_code=400, detail="Parent_msg_id required for non-root messages")
             
+    if payload.branch_from_message_id is not None:
+        query = db.query(Message)
+        filtered_query = query.filter(Message.id == payload.branch_from_message_id, Message.conversation_id == conversation.id)
+        branch_source = filtered_query.first()
+
+        if branch_source is None:
+            raise HTTPException(status_code=400, detail="Cannot find branch source message in current conversation")
+
     user_message = Message(
         conversation_id = conversation_id,
         role = "user",
         content = content,
-        parent_msg_id = payload.parent_msg_id
+        parent_msg_id = payload.parent_msg_id,
+        branch_from_message_id = payload.branch_from_message_id,
+        branch_from_text = payload.branch_from_text
     )
 
     db.add(user_message)
