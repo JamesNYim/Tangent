@@ -76,7 +76,7 @@ def send_message(conversation_id: int, payload: MessageCreate, db: Session = Dep
             
     if payload.branch_from_message_id is not None:
         query = db.query(Message)
-        filtered_query = query.filter(Message.id == payload.branch_from_message_id, Message.conversation_id == conversation.id)
+        filtered_query = query.filter(Message.id == payload.branch_from_message_id, Message.conversation_id == conversation_id)
         branch_source = filtered_query.first()
 
         if branch_source is None:
