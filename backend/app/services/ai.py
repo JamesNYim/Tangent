@@ -7,8 +7,7 @@ AI_DESCRIPTION = "You are Tangent, a helpful AI assistant."
 def resolve_api_key(user):
     if user.api_key:
         return user.api_key
-    return None
-    #return OPENAI_API_KEY
+    return OPENAI_API_KEY 
 
 def build_chat_msgs(db_messages):
     formatted = []
