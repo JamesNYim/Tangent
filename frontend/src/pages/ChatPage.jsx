@@ -96,7 +96,7 @@ export default function ChatPage() {
           setMainLeafId(data[data.length - 1].id);
       }
       else {
-          setMainleafId(null);
+          setMainLeafId(null);
      } 
      setBranchPanel(null)
     }
@@ -223,7 +223,6 @@ export default function ChatPage() {
   }
 
   function handleOpenBranch(message) {
-    console.log("Opened branch from message.id: " + message.id);
     setBranchPanel({
       branchPointId: message.id,
       leafId: message.id,
