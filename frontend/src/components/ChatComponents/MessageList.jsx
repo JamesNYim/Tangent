@@ -8,11 +8,11 @@ const styles = {
   },
 };
 
-export default function MessageList({ messages, onSelectMessage }) {
+export default function MessageList({ messages, onSelectMessage, onOpenBranch }) {
   return (
     <div style={styles.list}>
       {messages.map((msg) => (
-        <MessageBubble key={msg.id} msg={msg} onSelectMessage={onSelectMessage} />
+        <MessageBubble key={msg.id} msg={msg} onSelectMessage={onSelectMessage} onOpenBranch={onOpenBranch} />
       ))}
     </div>
   );

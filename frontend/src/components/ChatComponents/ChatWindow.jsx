@@ -26,7 +26,8 @@ export default function ChatWindow({
   setInput,
   onSendMessage,
   sending,
-  onSelectMessage
+  onSelectMessage,
+  onOpenBranch
 }) 
 {
   const inputDisabled = !selectedConversationId || sending;
@@ -43,7 +44,7 @@ export default function ChatWindow({
         ) : messages.length === 0 ? (
           <p>No messages yet. Start the conversation.</p>
         ) : (
-          <MessageList messages={messages} onSelectMessage={onSelectMessage} />
+          <MessageList messages={messages} onSelectMessage={onSelectMessage} onOpenBranch={onOpenBranch} />
         )}
       </div>
 

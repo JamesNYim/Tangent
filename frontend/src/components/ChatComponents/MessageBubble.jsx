@@ -20,7 +20,7 @@ const styles = {
   },
 };
 
-export default function MessageBubble({ msg, onSelectMessage }) {
+export default function MessageBubble({ msg, onSelectMessage, onOpenBranch}) {
   const bubbleStyle =
     msg.role === "user" ? styles.userBubble : styles.assistantBubble;
 
@@ -38,6 +38,12 @@ export default function MessageBubble({ msg, onSelectMessage }) {
     >
       <div style={styles.role}>{msg.role}</div>
       <div>{msg.content}</div>
+      <button onClick={(e) => {
+        e.stopPropagation();
+        onOpenBranch(message);
+      }}>
+        Branch
+      </button>
     </div>
   );
 }
