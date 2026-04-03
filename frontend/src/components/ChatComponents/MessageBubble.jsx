@@ -40,7 +40,7 @@ export default function MessageBubble({ msg, onSelectMessage, onOpenBranch}) {
       <div>{msg.content}</div>
       <button onClick={(e) => {
         e.stopPropagation();
-        onOpenBranch(message);
+        onOpenBranch(msg);
       }}>
         Branch
       </button>

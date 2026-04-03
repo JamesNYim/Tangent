@@ -223,6 +223,7 @@ export default function ChatPage() {
   }
 
   function handleOpenBranch(message) {
+    console.log("Opened branch from message.id: " + message.id);
     setBranchPanel({
       branchPointId: message.id,
       leafId: message.id,
