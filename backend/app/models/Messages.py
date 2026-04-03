@@ -16,7 +16,7 @@ class Message(Base):
     branch_from_text = Column(Text, nullable=True)
 
     conversation = relationship("Conversation", back_populates="messages")
-    parent = relationship("Message", remote_side=[id], back_populates="children")
-    children = relationship("Message", back_populates="parent", cascade="all, delete-orphan")
+    parent = relationship("Message", foreign_keys=[parent_msg_id], remote_side=[id], back_populates="children")
+    children = relationship("Message", foreign_keys=[parent_msg_id], back_populates="parent", cascade="all, delete-orphan")
     branch_from_message = relationship("Message", foreign_keys=[branch_from_message_id], remote_side=[id])
     
