@@ -7,7 +7,7 @@ const styles = {
   page: {
     display: "flex",
     height: "100vh",
-    background: "#2f2220",
+    background: "#3e4d44",
     color: "#f5f5d3"
   },
 };
@@ -246,6 +246,7 @@ export default function ChatPage() {
       />
 
       <ChatWindow
+        position={branchPanel ? "left" : "single"}
         error={error}
         selectedConversationId={selectedConversationId}
         loadingMessages={loadingMessages}
@@ -260,6 +261,7 @@ export default function ChatPage() {
 
       {branchPanel && (
       <ChatWindow
+        position={"right"}
         error={error}
         selectedConversationId={selectedConversationId}
         loadingMessages={false}

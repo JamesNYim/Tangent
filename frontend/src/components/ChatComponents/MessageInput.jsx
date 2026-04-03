@@ -3,13 +3,13 @@ const styles = {
     display: "flex",
     gap: "8px",
     padding: "16px",
-    borderTop: "1px solid #ddd",
   },
   input: {
     flex: 1,
     padding: "10px",
     background: "#33352c",
-    border: "1px solid #f5f5dc",
+    border: "3px solid #f5f5dc",
+    borderRadius: "25px",
     outline: "none",
   },
 };

@@ -2,8 +2,9 @@ import ConversationItem from "./ConversationItem";
 
 const styles = {
   sidebar: {
+    backgroundColor: "#3e4d44",
     width: "260px",
-    borderRight: "1px solid #ddd",
+    marginRight: "3px",
     padding: "16px",
     boxSizing: "border-box",
     overflowY: "auto",

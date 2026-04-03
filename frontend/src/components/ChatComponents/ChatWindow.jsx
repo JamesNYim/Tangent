@@ -1,12 +1,65 @@
 import MessageList from "./MessageList";
 import MessageInput from "./MessageInput";
 
+
+function getBorderRadius(position) {
+  switch (position) {
+    case "left":
+      return "15px 0 0 15px";
+    case "right":
+      return "0 15px 15px 0";
+    case "middle":
+      return "0";
+    default:
+      return "15px";
+  }
+}
+
+function getBorder(position) {
+  const base = {
+    borderTop: "2px solid #f5f5d3",
+    borderBottom: "2px solid #f5f5d3",
+  };
+
+  switch (position) {
+    case "left":
+      return {
+        ...base,
+        borderLeft: "2px solid #f5f5d3",
+        borderRight: "1px solid #f5f5d3", // shared edge → remove
+      };
+
+    case "right":
+      return {
+        ...base,
+        borderLeft: "1px solid #f5f5d3", 
+        borderRight: "2px solid #f5f5d3",
+      };
+
+    case "middle":
+      return {
+        ...base,
+        borderLeft: "none",
+        borderRight: "none",
+      };
+
+    default:
+      return {
+        border: "2px solid #f5f5d3",
+      };
+  }
+}
+
 const styles = {
-  main: {
+  main: (position) => ({
+    backgroundColor: "#2f2220",
     flex: 1,
     display: "flex",
     flexDirection: "column",
-  },
+    ...getBorder(position),
+    borderRadius: getBorderRadius(position),
+    overflow: "hidden",
+  }),
   messagesArea: {
     flex: 1,
     padding: "16px",
@@ -18,6 +71,7 @@ const styles = {
 };
 
 export default function ChatWindow({
+  position="single",
   error,
   selectedConversationId,
   loadingMessages,
@@ -33,7 +87,7 @@ export default function ChatWindow({
   const inputDisabled = !selectedConversationId || sending;
 
   return (
-    <main style={styles.main}>
+    <main style={styles.main(position)}>
       <div style={styles.messagesArea}>
         {error && <p style={styles.error}>{error}</p>}
 
