@@ -8,6 +8,7 @@ const styles = {
     padding: "16px",
     boxSizing: "border-box",
     overflowY: "auto",
+    flexShrink: 0
   },
   header: {
     display: "flex",

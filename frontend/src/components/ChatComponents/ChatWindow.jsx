@@ -53,6 +53,10 @@ function getBorder(position) {
 const styles = {
   main: (position) => ({
     backgroundColor: "#2f2220",
+    minHeight: 0,
+    minWidth: 0,
+    width: "100%",
+    height: "100%",
     flex: 1,
     display: "flex",
     flexDirection: "column",
@@ -61,7 +65,9 @@ const styles = {
     overflow: "hidden",
   }),
   messagesArea: {
+    display: "flex",
     flex: 1,
+    minHeight: 0,
     padding: "16px",
     overflowY: "auto",
   },
@@ -96,7 +102,7 @@ export default function ChatWindow({
         ) : loadingMessages ? (
           <p>Loading messages...</p>
         ) : messages.length === 0 ? (
-          <p>No messages yet. Start the conversation.</p>
+            <div style={{ margin: "auto" }}>No messages yet...</div>
         ) : (
           <MessageList messages={messages} onSelectMessage={onSelectMessage} onOpenBranch={onOpenBranch} />
         )}

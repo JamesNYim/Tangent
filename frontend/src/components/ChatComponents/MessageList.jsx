@@ -3,6 +3,9 @@ import MessageBubble from "./MessageBubble";
 const styles = {
   list: {
     display: "flex",
+    width: "100%",
+    minWidth: 0,
+    flex: 1,
     flexDirection: "column",
     gap: "12px",
   },

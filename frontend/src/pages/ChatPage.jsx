@@ -7,6 +7,7 @@ const styles = {
   page: {
     display: "flex",
     height: "100vh",
+    width: "100vw",
     background: "#3e4d44",
     color: "#f5f5d3"
   },

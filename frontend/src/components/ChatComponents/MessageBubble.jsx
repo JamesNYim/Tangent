@@ -1,15 +1,18 @@
 const styles = {
+  row: {
+    display: "flex",
+    width: "100%"
+  },
   bubble: {
     maxWidth: "70%",
     padding: "12px",
     borderRadius: "10px",
+    background: "#33352c",
   },
   userBubble: {
-    alignSelf: "flex-end",
     background: "#33352c",
   },
   assistantBubble: {
-    alignSelf: "flex-start",
     background: "#33352c",
   },
   role: {
@@ -20,30 +23,34 @@ const styles = {
   },
 };
 
-export default function MessageBubble({ msg, onSelectMessage, onOpenBranch}) {
-  const bubbleStyle =
-    msg.role === "user" ? styles.userBubble : styles.assistantBubble;
+export default function MessageBubble({ msg, onSelectMessage, onOpenBranch }) {
+  const isUser = msg.role === "user";
 
   return (
     <div
-      onClick= {() =>  {
-            onSelectMessage?.(msg.id);
-            console.log("clicked msg: ", msg.id);
-          }
-      }
       style={{
-        ...styles.bubble,
-        ...bubbleStyle,
+        ...styles.row,
+        justifyContent: isUser ? "flex-end" : "flex-start",
       }}
     >
-      <div style={styles.role}>{msg.role}</div>
-      <div>{msg.content}</div>
-      <button onClick={(e) => {
-        e.stopPropagation();
-        onOpenBranch(msg);
-      }}>
-        Branch
-      </button>
+      <div
+        onClick={() => {
+          onSelectMessage?.(msg.id);
+          console.log("clicked msg: ", msg.id);
+        }}
+        style={styles.bubble}
+      >
+        <div style={styles.role}>{msg.role}</div>
+        <div>{msg.content}</div>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpenBranch(msg);
+          }}
+        >
+          Branch
+        </button>
+      </div>
     </div>
   );
 }
