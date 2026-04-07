@@ -64,6 +64,21 @@ const styles = {
     borderRadius: getBorderRadius(position),
     overflow: "hidden",
   }),
+  branchHeader: {
+    padding: "12px",
+    borderBottom: "1px solid #798262",
+  },
+  branchMeta: {
+    fontSize: "12px",
+    opacity: 0.8,
+    marginBottom: "6px",
+  },
+  branchText: {
+    fontSize: "13px",
+    borderLeft: "3px solid #bb8954",
+    paddingLeft: "8px",
+    whiteSpace: "pre-wrap",
+  },
   messagesArea: {
     display: "flex",
     flex: 1,
@@ -87,13 +102,30 @@ export default function ChatWindow({
   onSendMessage,
   sending,
   onSelectMessage,
-  onOpenBranch
+  onOpenBranch,
+  branchPointId = null,
+  branchFromText = null
 }) 
 {
   const inputDisabled = !selectedConversationId || sending;
 
-  return (
+    return (
     <main style={styles.main(position)}>
+      {(branchPointId || branchFromText) && (
+        <div style={styles.branchHeader}>
+          {branchPointId && (
+            <div style={styles.branchMeta}>
+              Branching from message #{branchPointId}
+            </div>
+          )}
+
+          {branchFromText && (
+            <div style={styles.branchText}>
+              “{branchFromText}”
+            </div>
+          )}
+        </div>
+    )}  
       <div style={styles.messagesArea}>
         {error && <p style={styles.error}>{error}</p>}
 

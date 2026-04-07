@@ -223,13 +223,24 @@ export default function ChatPage() {
     };
   }
 
-  function handleOpenBranch(message) {
+  function normalizeSelectedText(selectedText) {
+      const cleaned = selectedText?.trim();
+      return cleaned ? cleaned : null;
+  }
+  function handleOpenBranch(message, selectedText = null) {
+    const cleanedText = normalizeSelectedText(selectedText);
+    console.log("OPENED BRANCH: ", {
+        messageId: message.id,
+        selectedText,
+        cleanedText
+    });
     setBranchPanel({
       branchPointId: message.id,
       leafId: message.id,
       input: "",
-      branchFromText: null,
+      branchFromText: cleanedText,
     });
+    console.log("branchPanel state:", branchPanel);
   }
 
   const mainPath = getPathToRoot(messages, mainLeafId);
