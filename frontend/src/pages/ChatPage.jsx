@@ -43,7 +43,7 @@ function getBranchPath(messages, leafId, branchPointId) {
   const fullPath = getPathToRoot(messages, leafId);
   const startIndex = fullPath.findIndex((m) => m.id === branchPointId);
   if (startIndex === -1) return [];
-  return fullPath.slice(startIndex);
+  return fullPath.slice(startIndex + 1); // + 1 to not include original message
 }
 
 export default function ChatPage() {
@@ -172,6 +172,10 @@ export default function ChatPage() {
         return;
     }
 
+    const combinedContent = branchPanel.branchFromText
+      ? `Highlighted context: ${branchPanel.branchFromText}\n\nUser input: ${trimmed}`
+      : trimmed;
+
     setSending(true);
     setError("");
 
@@ -179,7 +183,7 @@ export default function ChatPage() {
       const data = await api(`/conversations/${selectedConversationId}/messages`, {
         method: "POST",
         body: JSON.stringify({
-        content: trimmed,
+        content: combinedContent,
         parent_msg_id: branchPanel.leafId,
         branch_from_message_id: branchPanel.branchPointId,
         branch_from_text: branchPanel.branchFromText,
@@ -192,6 +196,7 @@ export default function ChatPage() {
         ...prev,
         leafId: data.ai_message.id,
         input: "",
+        hasStarted: true,
       }));
     } 
     catch (err) {
@@ -239,13 +244,22 @@ export default function ChatPage() {
       leafId: message.id,
       input: "",
       branchFromText: cleanedText,
+      hasStarted: false,
     });
     console.log("branchPanel state:", branchPanel);
   }
 
   const mainPath = getPathToRoot(messages, mainLeafId);
 
-  const branchPath = branchPanel ? getBranchPath(messages, branchPanel.leafId, branchPanel.branchPointId) : [];
+  let branchPath = [];
+
+  if (branchPanel && branchPanel.hasStarted) {
+    branchPath = getBranchPath(
+      messages,
+      branchPanel.leafId,
+      branchPanel.branchPointId
+    );
+  }
   return (
     <div style={styles.page}>
       <ConversationSidebar
@@ -286,6 +300,8 @@ export default function ChatPage() {
         onSelectMessage={(id) =>
           setBranchPanel((prev) => ({ ...prev, leafId: id }))
         }
+        branchPointId={branchPanel.branchPointId}
+        branchFromText={branchPanel.branchFromText}
       />
     )}
     </div>

@@ -121,7 +121,7 @@ export default function ChatWindow({
 
           {branchFromText && (
             <div style={styles.branchText}>
-              “{branchFromText}”
+              <strong>Selection:</strong> “{branchFromText}”
             </div>
           )}
         </div>
