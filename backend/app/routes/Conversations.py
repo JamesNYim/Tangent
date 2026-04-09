@@ -33,7 +33,7 @@ def list_conversations(db: Session = Depends(get_db), current_user: dict = Depen
     conversations = ordered_query.all()
     return conversations
 
-@router.patch("{conversation_id}")
+@router.patch("/{conversation_id}")
 def rename_conversation(conversation_id: int, payload: ConversationUpdate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     query = db.query(Conversation)
     filtered_query = query.filter(Conversation.id == conversation_id, Conversation.user_id == current_user["id"])
@@ -52,7 +52,7 @@ def rename_conversation(conversation_id: int, payload: ConversationUpdate, db: S
 
     return convo
 
-@router.delete("{conversation_id}")
+@router.delete("/{conversation_id}")
 def delete_conversation(conversation_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     query = db.query(Conversation)
     filtered_query = query.filter(Conversation.id == conversation_id, Conversation.user_id == current_user["id"])
