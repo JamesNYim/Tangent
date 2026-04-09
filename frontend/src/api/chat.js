@@ -27,9 +27,21 @@ export async function getMessages(conversationID) {
 }
 
 export async function sendMessage(conversationID, content, parentMsgID) {
-    const res = api(`/conversations/${conversationID}/messages`, {
+    const res = await api(`/conversations/${conversationID}/messages`, {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({ content, parent_msg_id: parentMsgID }),
     });
+
+    return res
+}
+
+export async function renameConversation(conversationID, newTitle) {
+    const res = await api(`/conversations/${conversationID}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title: newTitle }),
+    });
+
+    return res
+    
 }

@@ -29,6 +29,7 @@ export default function ConversationSidebar({
   loadingConversations,
   onNewChat,
   onSelectConversation,
+  onRenameConversation,
 }) 
 {
   return (
@@ -50,6 +51,7 @@ export default function ConversationSidebar({
               convo={convo}
               isActive={convo.id === selectedConversationId}
               onSelect={onSelectConversation}
+              onRename={onRenameConversation}
             />
           ))}
         </div>

@@ -1,7 +1,13 @@
 import { useEffect, useState } from "react";
-import { api } from "../api/client";
 import ConversationSidebar from "../components/ChatComponents/ConversationSidebar";
 import ChatWindow from "../components/ChatComponents/ChatWindow";
+import {
+  createConversation,
+  getConversations,
+  renameConversation,
+  getMessages,
+  sendMessage,
+} from "../api/chat";
 
 const styles = {
   page: {
@@ -72,11 +78,11 @@ export default function ChatPage() {
     setError("");
 
     try {
-      const data = await api("/conversations");
-      setConversations(data);
+      const conversations = await getConversations();
+      setConversations(conversations);
 
-      if (data.length > 0) {
-        setSelectedConversationId(data[0].id);
+      if (conversations.length > 0) {
+        setSelectedConversationId(conversations[0].id);
       }
     } catch (err) {
       setError(err.message || "Failed to load conversations");
@@ -85,16 +91,49 @@ export default function ChatPage() {
     }
   }
 
+  async function handleRenameConversation(conversationId, currentTitle) {
+    const newTitle = window.prompt("Rename chat:", currentTitle);
+  
+    if (newTitle == null) {
+      return;
+    }
+  
+    const trimmed = newTitle.trim();
+  
+    if (!trimmed) {
+      return;
+    }
+  
+    try {
+      const updatedConversation = await renameConversation(conversationId, trimmed);
+  
+      setConversations((prev) =>
+        prev.map((convo) => {
+          if (convo.id === conversationId) {
+            return {
+              ...convo,
+              title: updatedConversation.title,
+            };
+          }
+  
+          return convo;
+        })
+      );
+    } catch (err) {
+      setError(err.message || "Failed to rename conversation");
+    }
+  }
+
   async function loadMessages(conversationId) {
     setLoadingMessages(true);
     setError("");
 
     try {
-      const data = await api(`/conversations/${conversationId}/messages`);
-      setMessages(data);
+      const messages = await getMessages(conversationId);
+      setMessages(messages);
       // pick default node (for now just last message)
-      if (data.length > 0) {
-          setMainLeafId(data[data.length - 1].id);
+      if (messages.length > 0) {
+          setMainLeafId(messages[messages.length - 1].id);
       }
       else {
           setMainLeafId(null);
@@ -113,10 +152,7 @@ export default function ChatPage() {
     setError("");
 
     try {
-      const newConversation = await api("/conversations", {
-        method: "POST",
-        body: JSON.stringify({ title: "" }),
-      });
+      const newConversation = await createConversation();
 
       setConversations((prev) => [newConversation, ...prev]);
       setSelectedConversationId(newConversation.id);
@@ -139,13 +175,10 @@ export default function ChatPage() {
 
     try {
 
-      const data = await api(`/conversations/${selectedConversationId}/messages`, {
-        method: "POST",
-        body: JSON.stringify({ content: trimmed, parent_msg_id: mainLeafId}),
-      });
+      const message = await sendMessage(selectedConversationId, trimmed, mainLeafId);
 
-      setMessages((prev) => [...prev, data.user_message, data.ai_message]);
-      setMainLeafId(data.ai_message.id); 
+      setMessages((prev) => [...prev, message.user_message, message.ai_message]);
+      setMainLeafId(message.ai_message.id); 
       setInput("");
 
       setConversations((prev) => {
@@ -234,11 +267,6 @@ export default function ChatPage() {
   }
   function handleOpenBranch(message, selectedText = null) {
     const cleanedText = normalizeSelectedText(selectedText);
-    console.log("OPENED BRANCH: ", {
-        messageId: message.id,
-        selectedText,
-        cleanedText
-    });
     setBranchPanel({
       branchPointId: message.id,
       leafId: message.id,
@@ -268,6 +296,7 @@ export default function ChatPage() {
         loadingConversations={loadingConversations}
         onNewChat={handleNewChat}
         onSelectConversation={setSelectedConversationId}
+        onRenameConversation={handleRenameConversation}
       />
 
       <ChatWindow
