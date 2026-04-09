@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.session import get_db
 from app.models.conversations import Conversation
-from app.schemas.conversations import ConversationCreate, ConversationOut
+from app.schemas.conversations import ConversationCreate, ConversationOut, ConversationUpdate
 from app.api.auth import get_current_user
 
 router = APIRouter(prefix="/conversations", tags=["conversations"])
@@ -32,3 +32,36 @@ def list_conversations(db: Session = Depends(get_db), current_user: dict = Depen
     ordered_query = filtered_query.order_by(Conversation.created_at.desc(), Conversation.id.desc())
     conversations = ordered_query.all()
     return conversations
+
+@router.patch("{conversation_id}")
+def rename_conversation(conversation_id: int, payload: ConversationUpdate, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    query = db.query(Conversation)
+    filtered_query = query.filter(Conversation.id == conversation_id, Conversation.user_id == current_user["id"])
+    convo = filtered_query.first()
+
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    new_title = payload.title.strip()
+    if not new_title:
+        raise HTTPException(status_code=400, detail="Title cannot be empty")
+
+    convo.title = new_title
+    db.commit()
+    db.refresh(convo)
+
+    return convo
+
+@router.delete("{conversation_id}")
+def delete_conversation(conversation_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    query = db.query(Conversation)
+    filtered_query = query.filter(Conversation.id == conversation_id, Conversation.user_id == current_user["id"])
+    convo = filtered_query.first()
+
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    db.delete(convo)
+    db.commit()
+
+    return {"message": "Deleted Conversation"}
