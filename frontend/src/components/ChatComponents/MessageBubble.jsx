@@ -1,4 +1,5 @@
 import { useState } from "react";
+import MarkdownRenderer from "./MarkdownRenderer";
 
 const styles = {
   row: {
@@ -113,7 +114,7 @@ export default function MessageBubble({ msg, onSelectMessage, onOpenBranch }) {
           onMouseUp={captureSelection}
           onKeyUp={captureSelection}
         >
-          {msg.content}
+        <MarkdownRenderer content={msg.content} />
         </div>
 
         <div style={styles.actions}>
