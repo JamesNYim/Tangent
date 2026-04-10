@@ -1,5 +1,11 @@
+import { useState } from 'react';
+
+
 const styles = {
   item: {
+    position: "relative",
+    display: "flex",
+    justifyContent: "space-between",
     textAlign: "left",
     padding: "10px 12px",
     borderRadius: "8px",
@@ -21,19 +27,45 @@ const styles = {
     cursor: "pointer",
     padding: "4px 0",
   },
-  renameButton: {
-    background: "transparent",
-    border: "1px solid #ccc",
+  dropdown: {
+    position: "absolute",
+    right: "10px",
+    top: "40px",
+    background: "#2f322b",
+    border: "1px solid #555",
     borderRadius: "6px",
-    padding: "4px 8px",
-    cursor: "pointer",
+    display: "flex",
+    flexDirection: "column",
+    zIndex: 10,
+    padding: "4px 0px 4px 0px",
+  },
+  dropdownButton: {
+    width: "100%",
+    textAlign: "left",
+    padding: "4px 24px 4px 8px",
+    background: "transparent",
+    border: "none",
     color: "inherit",
+    cursor: "pointer",
+  },
+  conversationMenuButton: {
+    background: "transparent",
+    border: "none",
+    color: "#aaa",
+    cursor: "pointer",
+    fontSize: "18px",
+    padding: "0 6px",
   },
 };
 
-export default function ConversationItem({ convo, isActive, onSelect, onRename }) {
+export default function ConversationItem({ convo, isActive, onSelect, onRename, onDelete}) {
+  const [isHovered, setIsHovered] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  
   return (
     <div
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
       style={{
         ...styles.item,
         ...(isActive ? styles.activeItem : {}),
@@ -46,14 +78,34 @@ export default function ConversationItem({ convo, isActive, onSelect, onRename }
       >
         {convo.title}
       </button>
-
-      <button
-        type="button"
-        onClick={() => onRename(convo.id, convo.title)}
-        style={styles.renameButton}
+      {isHovered && (
+          <button
+            type="button"
+            style={styles.conversationMenuButton}
+            onClick={(e) => {
+              e.stopPropagation(); 
+              setShowMenu((prev) => !prev);
+            }}
+          >
+          ⋯
+          </button>
+      )}
+      {showMenu && (
+    <div style={styles.dropdown}>
+      <button 
+          onClick={() => onRename(convo.id, convo.title)}
+          style={styles.dropdownButton}
       >
         Rename
       </button>
+      <button
+          onClick={() => onDelete(convo.id)}
+          style={styles.dropdownButton}
+      >
+        Delete
+      </button>
+    </div>
+)}
     </div>
   );
 }
