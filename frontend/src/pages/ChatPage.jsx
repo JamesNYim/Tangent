@@ -5,6 +5,7 @@ import {
   createConversation,
   getConversations,
   renameConversation,
+  deleteConversation,
   getMessages,
   sendMessage,
 } from "../api/chat";
@@ -121,6 +122,24 @@ export default function ChatPage() {
       );
     } catch (err) {
       setError(err.message || "Failed to rename conversation");
+    }
+  }
+
+  async function handleDeleteConversation(conversationId) {
+    try {
+        const deletedConversation = await deleteConversation(conversationId);
+
+        setConversations((prev) =>
+            prev.filter((convo) => convo.id !== conversationId));
+
+        if (selectedConversationId === conversationId) {
+            setSelectedConversationId(null);
+            setMessages([]);
+        }
+    }
+    catch (e) {
+      console.log("Failed to delete conversation", e);
+      setError(e.message || "Failed to delete conversation");
     }
   }
 
@@ -297,6 +316,7 @@ export default function ChatPage() {
         onNewChat={handleNewChat}
         onSelectConversation={setSelectedConversationId}
         onRenameConversation={handleRenameConversation}
+        onDeleteConversation={handleDeleteConversation}
       />
 
       <ChatWindow

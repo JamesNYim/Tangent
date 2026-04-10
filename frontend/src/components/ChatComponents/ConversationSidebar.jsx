@@ -30,6 +30,7 @@ export default function ConversationSidebar({
   onNewChat,
   onSelectConversation,
   onRenameConversation,
+  onDeleteConversation,
 }) 
 {
   return (
@@ -52,6 +53,7 @@ export default function ConversationSidebar({
               isActive={convo.id === selectedConversationId}
               onSelect={onSelectConversation}
               onRename={onRenameConversation}
+              onDelete={onDeleteConversation}
             />
           ))}
         </div>

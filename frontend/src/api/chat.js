@@ -43,5 +43,12 @@ export async function renameConversation(conversationID, newTitle) {
     });
 
     return res
-    
+}
+
+export async function deleteConversation(conversationID) {
+    const res = await api(`/conversations/${conversationID}`, {
+        method: "DELETE"
+    });
+
+    return res;
 }
