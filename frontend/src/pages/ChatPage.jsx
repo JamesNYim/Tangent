@@ -1,9 +1,12 @@
 import { useEffect, useState } from "react";
 import ConversationSidebar from "../components/ChatComponents/ConversationSidebar";
 import ChatWindow from "../components/ChatComponents/ChatWindow";
+import { api }  from "../api/client"; 
+
 import {
   createConversation,
   getConversations,
+  getConversation,
   renameConversation,
   deleteConversation,
   getMessages,
@@ -51,6 +54,21 @@ function getBranchPath(messages, leafId, branchPointId) {
   const startIndex = fullPath.findIndex((m) => m.id === branchPointId);
   if (startIndex === -1) return [];
   return fullPath.slice(startIndex + 1); // + 1 to not include original message
+}
+
+function buildChildrenMap(messages) {
+    const map = new Map();
+
+    for (const msg of messages) {
+        const parentId = msg.parent_msg_id;
+        if (!map.has(parentId)) {
+            map.set(parentId, []);
+        }
+        let branchChildren = map.get(parentId);
+        branchChildren.push(msg);
+    }
+
+    return map;
 }
 
 export default function ChatPage() {
@@ -149,15 +167,12 @@ export default function ChatPage() {
 
     try {
       const messages = await getMessages(conversationId);
+      const convo = await getConversation(conversationId);
       setMessages(messages);
-      // pick default node (for now just last message)
-      if (messages.length > 0) {
-          setMainLeafId(messages[messages.length - 1].id);
-      }
-      else {
-          setMainLeafId(null);
-     } 
-     setBranchPanel(null)
+      
+      const resolvedMainLeafId = convo.main_leaf_id ?? (messages.length > 0 ? messages[messages.length - 1].id : null);
+      setMainLeafId(resolvedMainLeafId);
+      setBranchPanel(null)
     }
     catch (err) {
       setError(err.message || "Failed to load messages");
@@ -293,7 +308,22 @@ export default function ChatPage() {
       branchFromText: cleanedText,
       hasStarted: false,
     });
-    console.log("branchPanel state:", branchPanel);
+  }
+
+  function handleBranchToggle(messageId, branchChildren = []){
+      setBranchPanel((prev) => {
+          if (prev?.branchPointId === messageId) {
+              return null;
+          }
+
+          return {
+              branchPointId: messageId,
+               leafId: branchChildren[0]?.id ?? null,
+               input: "",
+               branchFromText: null,
+               hasStarted: true,
+          };
+      });
   }
 
   const mainPath = getPathToRoot(messages, mainLeafId);
@@ -307,6 +337,8 @@ export default function ChatPage() {
       branchPanel.branchPointId
     );
   }
+
+  const childrenMap = buildChildrenMap(messages);
   return (
     <div style={styles.page}>
       <ConversationSidebar
@@ -331,6 +363,9 @@ export default function ChatPage() {
         sending={sending}
         onSelectMessage={setMainLeafId}
         onOpenBranch={handleOpenBranch}
+        openBranchId={branchPanel?.branchPointId ?? null}
+        childrenMap={childrenMap}
+        onBranchToggle={handleBranchToggle}
       />
 
       {branchPanel && (

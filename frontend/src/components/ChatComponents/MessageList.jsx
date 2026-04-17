@@ -11,11 +11,19 @@ const styles = {
   },
 };
 
-export default function MessageList({ messages, onSelectMessage, onOpenBranch }) {
+export default function MessageList({ messages, onSelectMessage, onOpenBranch, childrenMap, onBranchToggle, openBranchRootId}) {
   return (
     <div style={styles.list}>
       {messages.map((msg) => (
-        <MessageBubble key={msg.id} msg={msg} onSelectMessage={onSelectMessage} onOpenBranch={onOpenBranch} />
+        <MessageBubble 
+          key={msg.id} 
+          msg={msg} 
+          onSelectMessage={onSelectMessage} 
+          onOpenBranch={onOpenBranch} 
+          branchChildren={childrenMap?.get(msg.id) || []} 
+          onBranchToggle={onBranchToggle}
+          isBranchOpen={openBranchRootId === msg.id}
+        />
       ))}
     </div>
   );

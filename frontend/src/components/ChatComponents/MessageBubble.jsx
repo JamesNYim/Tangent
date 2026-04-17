@@ -1,5 +1,5 @@
 import { useState } from "react";
-import MarkdownRenderer from "./MarkdownRenderer";
+//import MarkdownRenderer from "./MarkdownRenderer";
 
 const styles = {
   row: {
@@ -60,9 +60,29 @@ const styles = {
     borderLeft: "3px solid #bb8954",
     paddingLeft: "8px",
   },
+  branchButton: {
+    position: "absolute",
+    top: "6px",
+    right: "6px",
+    fontSize: "11px",
+    padding: "2px 6px",
+    borderRadius: "6px",
+    border: "1px solid #f5f5d3",
+    background: "transparent",
+    color: "#f5f5d3",
+    cursor: "pointer",
+    opacity: 0.8,
+  },
 };
 
-export default function MessageBubble({ msg, onSelectMessage, onOpenBranch }) {
+export default function MessageBubble({
+  msg,
+  onSelectMessage,
+  onOpenBranch,
+  branchChildren = [],
+  onBranchToggle,
+  isBranchOpen = false,
+}) {
   const isUser = msg.role === "user";
   const [selectedText, setSelectedText] = useState("");
 
@@ -70,6 +90,14 @@ export default function MessageBubble({ msg, onSelectMessage, onOpenBranch }) {
     const selection = window.getSelection();
     const text = selection?.toString()?.trim() || "";
     setSelectedText(text);
+  }
+
+  function handleBubbleClick() {
+    const selection = window.getSelection()?.toString()?.trim() || "";
+    if (selection) return;
+
+    onSelectMessage?.(msg.id);
+    console.log("clicked msg: ", msg.id);
   }
 
   function clearSelection(e) {
@@ -87,8 +115,10 @@ export default function MessageBubble({ msg, onSelectMessage, onOpenBranch }) {
   function handleBranchSelection(e) {
     e.stopPropagation();
     if (!selectedText.trim()) return;
-    onOpenBranch(msg, selectedText);
+    onOpenBranch?.(msg, selectedText);
   }
+
+  const isBranchPoint = branchChildren.length > 1;
 
   return (
     <div
@@ -98,10 +128,7 @@ export default function MessageBubble({ msg, onSelectMessage, onOpenBranch }) {
       }}
     >
       <div
-        onClick={() => {
-          onSelectMessage?.(msg.id);
-          console.log("clicked msg: ", msg.id);
-        }}
+        onClick={handleBubbleClick}
         style={{
           ...styles.bubble,
           ...(isUser ? styles.userBubble : styles.assistantBubble),
@@ -111,11 +138,28 @@ export default function MessageBubble({ msg, onSelectMessage, onOpenBranch }) {
 
         <div
           style={styles.content}
-          onMouseUp={captureSelection}
+          onMouseUp={(e) => {
+            captureSelection();
+            const selection = window.getSelection()?.toString()?.trim() || "";
+            if (selection) e.stopPropagation();
+          }}
           onKeyUp={captureSelection}
         >
-        <MarkdownRenderer content={msg.content} />
+          {msg.content}
         </div>
+
+        {isBranchPoint && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onBranchToggle?.(msg.id, branchChildren);
+            }}
+            style={styles.branchButton}
+          >
+            {isBranchOpen ? "▾" : "▸"} {branchChildren.length}
+          </button>
+        )}
 
         <div style={styles.actions}>
           <button onClick={handleBranchWholeMessage} style={styles.button}>
