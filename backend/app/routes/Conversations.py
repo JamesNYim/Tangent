@@ -25,6 +25,18 @@ def create_conversation(payload: ConversationCreate, db: Session = Depends(get_d
 
     return convo
 
+@router.get("/{conversation_id}")
+def get_conversation(conversation_id: int, db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
+    user_id = current_user["id"]
+    query = db.query(Conversation)
+    filtered_query = query.filter(Conversation.id == conversation_id, Conversation.user_id == user_id)
+    convo = filtered_query.first()
+
+    if not convo:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+
+    return convo
+
 @router.get("", response_model=list[ConversationOut])
 def list_conversations(db: Session = Depends(get_db), current_user: dict = Depends(get_current_user)):
     query = db.query(Conversation)

@@ -90,10 +90,8 @@ def send_message(conversation_id: int, payload: MessageCreate, db: Session = Dep
         branch_from_message_id = payload.branch_from_message_id,
         branch_from_text = payload.branch_from_text
     )
-
     db.add(user_message)
-    db.commit()
-    db.refresh(user_message)
+    db.flush()
 
 
     # get full history after saving user message
@@ -114,14 +112,19 @@ def send_message(conversation_id: int, payload: MessageCreate, db: Session = Dep
         parent_msg_id = user_message.id
     )
     db.add(ai_message)
-    db.commit()
-    db.refresh(ai_message)
+    db.flush()
+    is_branch_msg = payload.branch_from_message_id is not None
+    if not is_branch_msg:
+        convo.main_leaf_id = ai_message.id
 
     # optional: auto-title the conversation from first message
     if convo.title == "New Chat":
         convo.title = content[:40]
         db.add(convo)
-        db.commit()
+
+    db.commit()
+    db.refresh(user_message)
+    db.refresh(ai_message)
 
     return SendMessageResponse(
         user_message=user_message,

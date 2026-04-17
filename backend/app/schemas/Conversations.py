@@ -12,6 +12,7 @@ class ConversationOut(BaseModel):
     user_id: int
     title: str
     created_at: datetime
+    main_leaf_id: int | None = None
 
     class Config:
         from_attributes = True
