@@ -299,14 +299,31 @@ export default function ChatPage() {
       const cleaned = selectedText?.trim();
       return cleaned ? cleaned : null;
   }
+
+  function findLatestBranchLeaf(branchPointId, childrenMap) {
+    const children = childrenMap.get(branchPointId);
+    if (!children || children.length === 0) {
+      return null;
+    }
+  
+    let current = children[0]; // active branch child
+  
+    while (childrenMap.get(current.id) && childrenMap.get(current.id).length > 0) {
+      current = childrenMap.get(current.id)[0];
+    }
+  
+    return current.id;
+  }
+
   function handleOpenBranch(message, selectedText = null) {
     const cleanedText = normalizeSelectedText(selectedText);
+    const leafId = findLatestBranchLeaf(message.id, childrenMap);
     setBranchPanel({
       branchPointId: message.id,
-      leafId: message.id,
+      leafId: leafId ?? message.id,
       input: "",
       branchFromText: cleanedText,
-      hasStarted: false,
+      hasStarted: Boolean(leafId),
     });
   }
 
@@ -316,12 +333,13 @@ export default function ChatPage() {
               return null;
           }
 
+          const leafId = findLatestBranchLeaf(messageId, childrenMap);
           return {
               branchPointId: messageId,
-               leafId: branchChildren[0]?.id ?? null,
+               leafId: leafId ?? null,
                input: "",
                branchFromText: null,
-               hasStarted: true,
+               hasStarted: Boolean(leafId),
           };
       });
   }
