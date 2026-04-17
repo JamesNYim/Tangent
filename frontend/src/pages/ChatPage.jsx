@@ -379,7 +379,6 @@ export default function ChatPage() {
         setInput={setInput}
         onSendMessage={handleSendMessage}
         sending={sending}
-        onSelectMessage={setMainLeafId}
         onOpenBranch={handleOpenBranch}
         openBranchId={branchPanel?.branchPointId ?? null}
         childrenMap={childrenMap}
