@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import ConversationSidebar from "../components/ChatComponents/ConversationSidebar";
 import ChatWindow from "../components/ChatComponents/ChatWindow";
+import TreeSidebar from "../components/ChatComponents/TreeSidebar";
 import { api }  from "../api/client"; 
 
 import {
@@ -72,6 +73,7 @@ function buildChildrenMap(messages) {
 }
 
 export default function ChatPage() {
+  const messageRefs = useRef(new Map());
   const [conversations, setConversations] = useState([]);
   const [selectedConversationId, setSelectedConversationId] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -80,6 +82,7 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
+  const [focusedMessageId, setFocusedMessageId] = useState(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
@@ -91,6 +94,14 @@ export default function ChatPage() {
     if (selectedConversationId == null) return;
     loadMessages(selectedConversationId);
   }, [selectedConversationId]);
+
+  const registerMessageRef = useCallback((id, el) => {
+    if (el) {
+      messageRefs.current.set(id, el);
+    } else {
+      messageRefs.current.delete(id);
+    }
+  }, []);
 
   async function loadConversations() {
     setLoadingConversations(true);
@@ -346,6 +357,16 @@ export default function ChatPage() {
 
   const mainPath = getPathToRoot(messages, mainLeafId);
 
+
+  useEffect(() => {
+    if (mainPath.length > 0) {
+      setFocusedMessageId(mainPath[mainPath.length - 1].id);
+    } else {
+      setFocusedMessageId(null);
+    }
+  }, [mainPath]);
+
+
   let branchPath = [];
 
   if (branchPanel && branchPanel.hasStarted) {
@@ -355,6 +376,47 @@ export default function ChatPage() {
       branchPanel.branchPointId
     );
   }
+
+  function handleJumpToMessage(messageId) {
+    const el = messageRefs.current.get(messageId);
+  
+    if (!el) return;
+  
+    el.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
+  
+    setFocusedMessageId(messageId);
+  }
+  const handleMainScroll = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container || !mainPath.length) return;
+  
+    const containerRect = container.getBoundingClientRect();
+    const midpoint = containerRect.top + containerRect.height / 2;
+  
+    let closestId = null;
+    let closestDistance = Infinity;
+  
+    for (const msg of mainPath) {
+      const el = messageRefs.current.get(msg.id);
+      if (!el) continue;
+  
+      const rect = el.getBoundingClientRect();
+      const msgMid = rect.top + rect.height / 2;
+      const distance = Math.abs(msgMid - midpoint);
+  
+      if (distance < closestDistance) {
+        closestDistance = distance;
+        closestId = msg.id;
+      }
+    }
+  
+    if (closestId !== null) {
+      setFocusedMessageId(closestId);
+    }
+  }, [mainPath]);
 
   const childrenMap = buildChildrenMap(messages);
   return (
@@ -368,6 +430,15 @@ export default function ChatPage() {
         onRenameConversation={handleRenameConversation}
         onDeleteConversation={handleDeleteConversation}
       />
+
+    <TreeSidebar
+      mainPath={mainPath}
+      childrenMap={childrenMap}
+      focusedMessageId={focusedMessageId}
+      activeLastLeafId={mainLeafId}
+      onJumpToMessage={handleJumpToMessage}
+      onOpenBranch={(message, childId) => handleOpenBranch(message)}
+    />
 
       <ChatWindow
         position={branchPanel ? "left" : "single"}
