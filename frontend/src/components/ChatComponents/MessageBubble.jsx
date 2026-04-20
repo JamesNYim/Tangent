@@ -118,7 +118,7 @@ export default function MessageBubble({
     onOpenBranch?.(msg, selectedText);
   }
 
-  const isBranchPoint = branchChildren.length > 1;
+  const isBranchPoint = branchChildren.some((child) => child.branch_from_message_id === msg.id);
 
   return (
     <div
@@ -157,7 +157,7 @@ export default function MessageBubble({
             }}
             style={styles.branchButton}
           >
-            {isBranchOpen ? "▾" : "▸"} {branchChildren.length}
+            {isBranchOpen ? "▾" : "▸"} {/* branchChildren.length */}
           </button>
         )}
 
