@@ -326,14 +326,42 @@ export default function ChatPage() {
     return current.id;
   }
 
-  function handleOpenBranch(message, selectedText = null) {
+  function handleOpenBranch(message, selectedText = null, childId = null) {
     const cleanedText = normalizeSelectedText(selectedText);
+  
+    // If user highlighted text, treat this as starting a NEW branch draft
+    if (cleanedText) {
+      setBranchPanel({
+        branchPointId: message.id,
+        leafId: message.id,
+        input: "",
+        branchFromText: cleanedText,
+        hasStarted: false,
+      });
+      return;
+    }
+
+    // Specific existing child branch clicked from tree
+    if (childId) {
+      const leafId = findLatestBranchLeaf(childId, childrenMap);
+      setBranchPanel({
+        branchPointId: message.id,
+        leafId: leafId ?? childId,
+        input: "",
+        branchFromText: null,
+        hasStarted: true,
+      });
+      return;
+    }
+  
+    // Otherwise, open an existing branch if one already exists
     const leafId = findLatestBranchLeaf(message.id, childrenMap);
+  
     setBranchPanel({
       branchPointId: message.id,
       leafId: leafId ?? message.id,
       input: "",
-      branchFromText: cleanedText,
+      branchFromText: null,
       hasStarted: Boolean(leafId),
     });
   }
@@ -437,7 +465,7 @@ export default function ChatPage() {
       focusedMessageId={focusedMessageId}
       activeLastLeafId={mainLeafId}
       onJumpToMessage={handleJumpToMessage}
-      onOpenBranch={(message, childId) => handleOpenBranch(message)}
+      onOpenBranch={(message, childId) => handleOpenBranch(message, null, childId)}
     />
 
       <ChatWindow

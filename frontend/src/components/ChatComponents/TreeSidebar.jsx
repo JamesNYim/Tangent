@@ -159,7 +159,7 @@ export default function TreeSidebar({
                                                         <div style= {{...styles.nestedVertical, left: `${leftOffset + 5}px`}}/>
                                                         <button
                                                             type="button"
-                                                            onClick={() => onOpenBranch?.(child, nestedChildren[0].id)}
+                                                            onClick={() => onOpenBranch?.(msg, nestedChildren[0].id)}
                                                             style={{...styles.nestedNode, left: `${leftOffset}px`}}
                                                             title={`Open nested branch ${child.id}`}
                                                         />
