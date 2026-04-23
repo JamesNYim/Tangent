@@ -1,3 +1,4 @@
+import React from 'react';
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
@@ -36,41 +37,50 @@ const styles = {
   },
 };
 
-export default function MarkdownRenderer({ content }) {
+function MarkdownRenderer({ content }) {
   return (
-    <ReactMarkdown
-      remarkPlugins={[remarkGfm]}
-      components={{
-        code({ inline, className, children, ...props }) {
-          const match = /language-(\w+)/.exec(className || "");
-          const language = match ? match[1] : null;
+    <div>
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        components={{
+          code({ inline, className, children, ...props }) {
+            const match = /language-(\w+)/.exec(className || "");
+            const language = match?.[1];
 
-          if (inline) {
-            return (
-              <code style={styles.inlineCode} {...props}>
-                {children}
-              </code>
-            );
-          }
-
-          return (
-            <div style={styles.codeBlockWrap}>
-              {language && (
-                <div style={styles.codeHeader}>
-                  <span>{language}</span>
-                </div>
-              )}
-              <pre style={styles.codeBlock}>
-                <code className={className} style={styles.codeText} {...props}>
+            if (inline) {
+              return (
+                <code style={styles.inlineCode} {...props}>
                   {children}
                 </code>
-              </pre>
-            </div>
-          );
-        },
-      }}
-    >
-      {content}
-    </ReactMarkdown>
+              );
+            }
+
+            return (
+              <div style={styles.codeBlockWrap}>
+                {language && (
+                  <div style={styles.codeHeader}>
+                    <span>{language}</span>
+                  </div>
+                )}
+
+                <pre style={styles.codeBlock}>
+                  <code className={className} style={styles.codeText} {...props}>
+                    {children}
+                  </code>
+                </pre>
+              </div>
+            );
+          },
+
+          p({ children }) {
+            return <p style={{ margin: "0 0 8px" }}>{children}</p>;
+          },
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
   );
 }
+
+export default React.memo(MarkdownRenderer);
