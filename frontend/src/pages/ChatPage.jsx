@@ -459,15 +459,15 @@ export default function ChatPage() {
         onDeleteConversation={handleDeleteConversation}
       />
 
-    <TreeSidebar
-      mainPath={mainPath}
-      childrenMap={childrenMap}
-      focusedMessageId={focusedMessageId}
-      activeLastLeafId={mainLeafId}
-      onJumpToMessage={handleJumpToMessage}
-      onOpenBranch={(message, childId) => handleOpenBranch(message, null, childId)}
-    />
-
+  
+      <TreeSidebar
+          mainPath={mainPath}
+          childrenMap={childrenMap}
+          focusedMessageId={focusedMessageId}
+          activeLastLeafId={mainLeafId}
+          onJumpToMessage={handleJumpToMessage}
+          onOpenBranch={(message, childId) => handleOpenBranch(message, null, childId)}
+      />
       <ChatWindow
         position={branchPanel ? "left" : "single"}
         error={error}

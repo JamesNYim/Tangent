@@ -1,12 +1,15 @@
+import React from "react";
+
 const NODE_SIZE = 12;
-const FIRST_BRANCH_OFFSET = 12;
 const ROW_HEIGHT = 28;
-const BRANCH_GAP = 24;
+const BRANCH_X_STEP = 24;
+const BRANCH_Y_STEP = 22;
+const FIRST_BRANCH_OFFSET = 24;
 
 const styles = {
   sidebar: {
-    width: "160px",
-    minWidth: "160px",
+    width: "180px",
+    minWidth: "180px",
     background: "#252822",
     borderRight: "1px solid #4b5246",
     padding: "12px 10px",
@@ -36,9 +39,10 @@ const styles = {
     height: `${NODE_SIZE}px`,
     borderRadius: "999px",
     border: "2px solid #d8dcc8",
-    background: "transparent",
+    background: "#252822",
     padding: 0,
     cursor: "pointer",
+    zIndex: 2,
   },
   activeNode: {
     background: "#d8dcc8",
@@ -51,129 +55,221 @@ const styles = {
     left: "5px",
     top: `${NODE_SIZE}px`,
     width: "2px",
-    height: `${ROW_HEIGHT - NODE_SIZE + 4}px`,
     background: "#6a7261",
   },
   branchHorizontal: {
     position: "absolute",
-    left: `${NODE_SIZE}px`,
-    top: "5px",
     height: "2px",
+    background: "#9fb39f",
+  },
+  branchVertical: {
+    position: "absolute",
+    width: "2px",
     background: "#9fb39f",
   },
   branchNode: {
     position: "absolute",
-    top: "0px",
     width: `${NODE_SIZE}px`,
     height: `${NODE_SIZE}px`,
     borderRadius: "999px",
     border: "2px solid #9fb39f",
-    background: "transparent",
+    background: "#252822",
     padding: 0,
     cursor: "pointer",
-  },
-  nestedVertical: {
-    position: "absolute",
-    top: `${NODE_SIZE}px`,
-    width: "2px",
-    height: `${ROW_HEIGHT - NODE_SIZE}px`,
-    background: "#9fb39f",
-  },
-  nestedNode: {
-    position: "absolute",
-    top: `${ROW_HEIGHT}px`,
-    width: `${NODE_SIZE}px`,
-    height: `${NODE_SIZE}px`,
-    borderRadius: "999px",
-    border: "2px solid #9fb39f",
-    background: "transparent",
-    padding: 0,
-    cursor: "pointer",
+    zIndex: 2,
   },
 };
 
+
+function getChildren(childrenMap, messageID) {
+    return childrenMap.get(messageID) || [];
+}
+
+function getSubtreeHeight(node, childrenMap) {
+    const children = getChildren(childrenMap, node.id);
+
+    if (children.length === 0) {
+        return BRANCH_Y_STEP;
+    }
+
+    let total = 0;
+    for (const child of children) {
+       total += getSubtreeHeight(child, childrenMap); 
+    }
+    return Math.max(BRANCH_Y_STEP, total);
+}
+
+function BranchSubtree({node, childrenMap, originalBranchPoint, onOpenBranch, x, y}) {
+    const children = getChildren(childrenMap, node.id);
+
+    // Draw node
+    return (
+        <>
+            <button
+                type="button"
+                onClick={() => {onOpenBranch?.(originalBranchPoint, node.id)}}
+                style={{...styles.branchNode, left: `${x}px`, top: `${y}px`}}
+                title={`Open Branch ${node.id}`}
+            />
+            {children.map((child, index) => {
+                const previousSiblings = children.slice(0, index);
+
+                let priorHeight = 0;
+
+                for (const sibling of previousSiblings) {
+                    const siblingHeight = getSubtreeHeight(sibling, childrenMap);
+                    priorHeight += siblingHeight;
+                }
+
+                const childX = x;
+                const childY = y + BRANCH_Y_STEP;
+
+                const parentCenterX = x + NODE_SIZE / 2;
+                const parentCenterY = y + NODE_SIZE / 2;
+
+                const childCenterX = childX + NODE_SIZE / 2;
+                const childCenterY = childY + NODE_SIZE / 2;
+
+                return (
+                    <React.Fragment key={child.id}>
+                        <div
+                            style={{
+                                ...styles.branchHorizontal, 
+                                left: `${parentCenterX}px`, 
+                                top: `${parentCenterY}px`, 
+                                width: `${childCenterX - parentCenterX}px`,
+                            }}
+                        />
+                        <div
+                            style={{
+                                ...styles.branchVertical,
+                                left: `${childCenterX - 1}px`,
+                                top: `${parentCenterY}px`,
+                                height: `${childCenterY - parentCenterY}px`,
+                            }}
+                        />
+                        <BranchSubtree
+                            node={child}
+                            childrenMap={childrenMap}
+                            originalBranchPoint={originalBranchPoint}
+                            onOpenBranch={onOpenBranch}
+                            x={childX}
+                            y={childY}
+                        />
+                    </React.Fragment>
+                );
+            })}
+        </>
+    );
+}
+
 export default function TreeSidebar({
     mainPath = [],
-    childrenMap = {},
+    childrenMap = new Map(),
     focusedMessageId = null,
     activeLastLeafId = null,
     onJumpToMessage,
-    onOpenBranch
+    onOpenBranch,
 }) {
+    
     if (!mainPath.length) {
         return (
-            <aside style={styles.sidebar}>
-                <div style={styles.title}>Tree</div>
-                <div style={styles.empty}>No leaves yet...</div>
-            </aside>
+          <aside style={styles.sidebar}>
+            <div style={styles.title}>Tree</div>
+            <div style={styles.empty}>No leaves yet...</div>
+          </aside>
         );
     }
-    return (
-        <div style={styles.sidebar}>
-            <div style={styles.title}>Tree</div>
-            {mainPath.map((msg, index) => {
-                const nextMsg = mainPath[index + 1];
-                const children = childrenMap.get(msg.id) || [];
 
-                const mainBranchChildId = nextMsg?.parent_msg_id === msg.id ? nextMsg.id : null;
-                const branchChildren = children.filter((child) => child.id !== mainBranchChildId);
+  return (
+    <aside style={styles.sidebar}>
+      <div style={styles.title}>Tree</div>
 
-                const isFocused = msg.id === focusedMessageId;
-                const isActive = msg.id === activeLastLeafId;
-                const hasNext = index < mainPath.length - 1;
+      {mainPath.map((msg, index) => {
+        const nextMsg = mainPath[index + 1];
+        const children = getChildren(childrenMap, msg.id);
 
-                const rowHeight = branchChildren.length > 0 ? ROW_HEIGHT + 24 : ROW_HEIGHT;
+        const mainBranchChildId =
+          nextMsg?.parent_msg_id === msg.id ? nextMsg.id : null;
 
-                return (
-                    <div key={msg.id} style={{...styles.row, minHeight: `${rowHeight}px`}}>
-                        <div>
-                            <button
-                                type="button"
-                                onClick={() => onJumpToMessage?.(msg.id)}
-                                style={{
-                                    ...styles.mainNode,
-                                    ...(isActive ? styles.activeNode : {}),
-                                    ...(isFocused ? styles.focusedNode : {})
-                                }}
-                                title={`Jump to message ${msg.id}`}
-                            />
-                            {hasNext && <div style={styles.mainVertical}/>}
-                            {branchChildren.length > 0 && (
-                                <>
-                                    <div style= {{...styles.branchHorizontal, width: `${(branchChildren.length - 1) * BRANCH_GAP + NODE_SIZE}px`}} />
-                                    {branchChildren.map((child, branchIndex) => {
-                                        const leftOffset =  FIRST_BRANCH_OFFSET + NODE_SIZE + branchIndex * BRANCH_GAP;
-                                        const nestedChildren = childrenMap.get(child.id) || [];
-                                        const hasNested = nestedChildren.length > 0;
+        const branchChildren = children.filter(
+          (child) => child.id !== mainBranchChildId
+        );
 
-                                        return (
-                                            <div key={child.id}>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {onOpenBranch?.(msg, child.id)}}
-                                                    style={{...styles.branchNode, left: `${leftOffset}px`}}
-                                                    title={`Open branch ${child.id}`}
-                                                />
-                                                {hasNested && (
-                                                    <>
-                                                        <div style= {{...styles.nestedVertical, left: `${leftOffset + 5}px`}}/>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => onOpenBranch?.(msg, nestedChildren[0].id)}
-                                                            style={{...styles.nestedNode, left: `${leftOffset}px`}}
-                                                            title={`Open nested branch ${child.id}`}
-                                                        />
-                                                    </>
-                                                )}
-                                            </div>
-                                        );
-                                    })}
-                                </>
-                            )}
-                        </div>
-                    </div>
-                );
+        const isFocused = msg.id === focusedMessageId;
+        const isActive = msg.id === activeLastLeafId;
+        const hasNext = index < mainPath.length - 1;
+
+        const deepestBranchHeight = branchChildren.reduce((maxHeight, child) => {
+          return Math.max(maxHeight, getSubtreeHeight(child, childrenMap));
+        }, 0);
+
+        const rowHeight =
+          branchChildren.length > 0
+            ? ROW_HEIGHT + deepestBranchHeight + BRANCH_Y_STEP
+            : ROW_HEIGHT;
+
+        return (
+          <div
+            key={msg.id}
+            style={{
+              ...styles.row,
+              minHeight: `${rowHeight}px`,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => onJumpToMessage?.(msg.id)}
+              style={{
+                ...styles.mainNode,
+                ...(isActive ? styles.activeNode : {}),
+                ...(isFocused ? styles.focusedNode : {}),
+              }}
+              title={`Jump to message ${msg.id}`}
+            />
+
+            {hasNext && (
+              <div
+                style={{
+                  ...styles.mainVertical,
+                  height: `${rowHeight - NODE_SIZE}px`,
+                }}
+              />
+            )}
+
+            {branchChildren.map((child, branchIndex) => {
+              const branchX =
+                FIRST_BRANCH_OFFSET + branchIndex * BRANCH_X_STEP;
+              const branchY = 0;
+
+              const parentCenterX = NODE_SIZE / 2;
+              const parentCenterY = NODE_SIZE / 2;
+              const childCenterX = branchX + NODE_SIZE / 2;
+
+              return (
+                <React.Fragment key={child.id}>
+                  <div
+                    style={{
+                      ...styles.branchHorizontal,
+                      left: `${parentCenterX}px`,
+                      top: `${parentCenterY}px`,
+                      width: `${childCenterX - parentCenterX}px`,
+                    }}
+                  />
+                  <BranchSubtree
+                    node={child}
+                    childrenMap={childrenMap}
+                    originalBranchPoint={msg}
+                    onOpenBranch={onOpenBranch}
+                    x={branchX}
+                    y={branchY}
+                  />
+                </React.Fragment>
+              );
             })}
-        </div>
-    );
+          </div>
+        );
+      })}
+    </aside>
+  );
 }
