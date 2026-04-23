@@ -103,11 +103,11 @@ export default function ChatWindow({
   sending,
   onSelectMessage,
   onOpenBranch,
+  onBranchToggle,
   openBranchId,
   branchPointId = null,
   branchFromText = null,
   childrenMap,
-  onBranchToggle
 }) 
 {
   const inputDisabled = !selectedConversationId || sending;
@@ -143,8 +143,8 @@ export default function ChatWindow({
             messages={messages} 
             onSelectMessage={onSelectMessage} 
             onOpenBranch={onOpenBranch} 
-            childrenMap={childrenMap} 
             onBranchToggle={onBranchToggle}
+            childrenMap={childrenMap} 
             openBranchRootId={openBranchId}
           />
         )}

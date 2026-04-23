@@ -11,20 +11,39 @@ const styles = {
   },
 };
 
-export default function MessageList({ messages, onSelectMessage, onOpenBranch, childrenMap, onBranchToggle, openBranchRootId}) {
+export default function MessageList({
+  messages,
+  onSelectMessage,
+  onOpenBranch,
+  childrenMap,
+  onBranchToggle,
+  openBranchRootId,
+}) {
   return (
     <div style={styles.list}>
-      {messages.map((msg) => (
-        <MessageBubble 
-          key={msg.id} 
-          msg={msg} 
-          onSelectMessage={onSelectMessage} 
-          onOpenBranch={onOpenBranch} 
-          branchChildren={childrenMap?.get(msg.id) || []} 
-          onBranchToggle={onBranchToggle}
-          isBranchOpen={openBranchRootId === msg.id}
-        />
-      ))}
+      {messages.map((msg, index) => {
+        const allChildren = childrenMap?.get(msg.id) || [];
+
+        const nextMsg = messages[index + 1];
+        const mainChild =
+          nextMsg?.parent_msg_id === msg.id ? nextMsg : null;
+
+        const branchChildren = allChildren.filter(
+          (child) => child.id !== mainChild?.id
+        );
+
+        return (
+          <MessageBubble
+            key={msg.id}
+            msg={msg}
+            onSelectMessage={onSelectMessage}
+            onOpenBranch={onOpenBranch}
+            onBranchToggle={onBranchToggle}
+            branchChildren={branchChildren}
+            isBranchOpen={openBranchRootId === msg.id}
+          />
+        );
+      })}
     </div>
   );
 }

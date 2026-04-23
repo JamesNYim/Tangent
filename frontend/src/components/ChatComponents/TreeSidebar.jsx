@@ -99,7 +99,7 @@ function getSubtreeHeight(node, childrenMap) {
     return Math.max(BRANCH_Y_STEP, total);
 }
 
-function BranchSubtree({node, childrenMap, originalBranchPoint, onOpenBranch, x, y}) {
+function BranchSubtree({node, childrenMap, originalBranchPoint, onBranchToggle, x, y}) {
     const children = getChildren(childrenMap, node.id);
 
     // Draw node
@@ -107,9 +107,9 @@ function BranchSubtree({node, childrenMap, originalBranchPoint, onOpenBranch, x,
         <>
             <button
                 type="button"
-                onClick={() => {onOpenBranch?.(originalBranchPoint, node.id)}}
+                onClick={() => {onBranchToggle?.(originalBranchPoint.id, node.id)}}
                 style={{...styles.branchNode, left: `${x}px`, top: `${y}px`}}
-                title={`Open Branch ${node.id}`}
+                title={`msg ${node.id}`}
             />
             {children.map((child, index) => {
                 const previousSiblings = children.slice(0, index);
@@ -152,7 +152,7 @@ function BranchSubtree({node, childrenMap, originalBranchPoint, onOpenBranch, x,
                             node={child}
                             childrenMap={childrenMap}
                             originalBranchPoint={originalBranchPoint}
-                            onOpenBranch={onOpenBranch}
+                            onBranchToggle={onBranchToggle}
                             x={childX}
                             y={childY}
                         />
@@ -169,7 +169,7 @@ export default function TreeSidebar({
     focusedMessageId = null,
     activeLastLeafId = null,
     onJumpToMessage,
-    onOpenBranch,
+    onBranchToggle,
 }) {
     
     if (!mainPath.length) {
@@ -225,7 +225,7 @@ export default function TreeSidebar({
                 ...(isActive ? styles.activeNode : {}),
                 ...(isFocused ? styles.focusedNode : {}),
               }}
-              title={`Jump to message ${msg.id}`}
+              title={`msg ${msg.id}`}
             />
 
             {hasNext && (
@@ -260,7 +260,7 @@ export default function TreeSidebar({
                     node={child}
                     childrenMap={childrenMap}
                     originalBranchPoint={msg}
-                    onOpenBranch={onOpenBranch}
+                    onBranchToggle={onBranchToggle}
                     x={branchX}
                     y={branchY}
                   />

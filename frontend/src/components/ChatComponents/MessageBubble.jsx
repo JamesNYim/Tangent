@@ -79,8 +79,8 @@ export default function MessageBubble({
   msg,
   onSelectMessage,
   onOpenBranch,
-  branchChildren = [],
   onBranchToggle,
+  branchChildren = [],
   isBranchOpen = false,
 }) {
   const isUser = msg.role === "user";
@@ -153,7 +153,9 @@ export default function MessageBubble({
             type="button"
             onClick={(e) => {
               e.stopPropagation();
-              onBranchToggle?.(msg.id, branchChildren);
+              const firstBranchChild = branchChildren[0];
+              if (!firstBranchChild) return;
+              onBranchToggle?.(msg.id, firstBranchChild.id);
             }}
             style={styles.branchButton}
           >

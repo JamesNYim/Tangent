@@ -366,21 +366,33 @@ export default function ChatPage() {
     });
   }
 
-  function handleBranchToggle(messageId, branchChildren = []){
-      setBranchPanel((prev) => {
-          if (prev?.branchPointId === messageId) {
-              return null;
-          }
+  function handleBranchToggle(messageId, childId = null) { 
+      if (!childId) {
+          return;
+      }
 
-          const leafId = findLatestBranchLeaf(messageId, childrenMap);
-          return {
-              branchPointId: messageId,
-               leafId: leafId ?? null,
-               input: "",
-               branchFromText: null,
-               hasStarted: Boolean(leafId),
-          };
+      const leafId = findLatestBranchLeaf(childId, childrenMap) ?? childId;
+
+      const isSameBranchOpen =
+          branchPanel &&
+          branchPanel.branchPointId === messageId &&
+          branchPanel.leafId === leafId &&
+          branchPanel.hasStarted;
+
+      if (isSameBranchOpen) {
+          setBranchPanel(null);
+          return;
+      }
+
+      setBranchPanel({
+          branchPointId: messageId,
+          leafId,
+          input: "",
+          branchFromText: null,
+          hasStarted: true,
       });
+
+
   }
 
   const mainPath = getPathToRoot(messages, mainLeafId);
@@ -466,7 +478,7 @@ export default function ChatPage() {
           focusedMessageId={focusedMessageId}
           activeLastLeafId={mainLeafId}
           onJumpToMessage={handleJumpToMessage}
-          onOpenBranch={(message, childId) => handleOpenBranch(message, null, childId)}
+          onBranchToggle={handleBranchToggle}      
       />
       <ChatWindow
         position={branchPanel ? "left" : "single"}
@@ -479,9 +491,9 @@ export default function ChatPage() {
         onSendMessage={handleSendMessage}
         sending={sending}
         onOpenBranch={handleOpenBranch}
+        onBranchToggle={handleBranchToggle}
         openBranchId={branchPanel?.branchPointId ?? null}
         childrenMap={childrenMap}
-        onBranchToggle={handleBranchToggle}
       />
 
       {branchPanel && (
