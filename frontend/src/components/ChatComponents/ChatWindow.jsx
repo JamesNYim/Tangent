@@ -108,6 +108,8 @@ export default function ChatWindow({
   branchPointId = null,
   branchFromText = null,
   childrenMap,
+  registerMessageRef,
+  onMainScroll,
 }) 
 {
   const inputDisabled = !selectedConversationId || sending;
@@ -129,7 +131,7 @@ export default function ChatWindow({
           )}
         </div>
     )}  
-      <div style={styles.messagesArea}>
+      <div style={styles.messagesArea} onScroll={onMainScroll}>
         {error && <p style={styles.error}>{error}</p>}
 
         {selectedConversationId == null ? (
@@ -146,6 +148,8 @@ export default function ChatWindow({
             onBranchToggle={onBranchToggle}
             childrenMap={childrenMap} 
             openBranchRootId={openBranchId}
+            registerMessageRef={registerMessageRef}
+            onMainScroll={onMainScroll}
           />
         )}
       </div>

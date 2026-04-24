@@ -18,6 +18,8 @@ export default function MessageList({
   childrenMap,
   onBranchToggle,
   openBranchRootId,
+  registerMessageRef,
+  onMainScroll,
 }) {
   return (
     <div style={styles.list}>
@@ -41,6 +43,8 @@ export default function MessageList({
             onBranchToggle={onBranchToggle}
             branchChildren={branchChildren}
             isBranchOpen={openBranchRootId === msg.id}
+            registerMessageRef={registerMessageRef}
+            onMainScroll={onMainScroll}
           />
         );
       })}

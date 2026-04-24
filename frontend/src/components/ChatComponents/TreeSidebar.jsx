@@ -46,9 +46,7 @@ const styles = {
   },
   activeNode: {
     background: "#d8dcc8",
-  },
-  focusedNode: {
-    boxShadow: "0 0 0 3px rgba(216, 220, 200, 0.25)",
+    scale: "1.2",
   },
   mainVertical: {
     position: "absolute",
@@ -222,8 +220,7 @@ export default function TreeSidebar({
               onClick={() => onJumpToMessage?.(msg.id)}
               style={{
                 ...styles.mainNode,
-                ...(isActive ? styles.activeNode : {}),
-                ...(isFocused ? styles.focusedNode : {}),
+                ...(isFocused ? styles.activeNode: {}),
               }}
               title={`msg ${msg.id}`}
             />

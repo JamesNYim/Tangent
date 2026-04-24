@@ -82,6 +82,7 @@ export default function MessageBubble({
   onBranchToggle,
   branchChildren = [],
   isBranchOpen = false,
+  registerMessageRef,
 }) {
   const isUser = msg.role === "user";
   const [selectedText, setSelectedText] = useState("");
@@ -122,6 +123,7 @@ export default function MessageBubble({
 
   return (
     <div
+      ref={(el) => registerMessageRef?.(msg.id, el)}
       style={{
         ...styles.row,
         justifyContent: isUser ? "flex-end" : "flex-start",

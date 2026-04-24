@@ -399,13 +399,10 @@ export default function ChatPage() {
 
 
   useEffect(() => {
-    if (mainPath.length > 0) {
+    if (focusedMessageId == null && mainPath.length > 0) {
       setFocusedMessageId(mainPath[mainPath.length - 1].id);
-    } else {
-      setFocusedMessageId(null);
     }
   }, [mainPath]);
-
 
   let branchPath = [];
 
@@ -424,18 +421,18 @@ export default function ChatPage() {
   
     el.scrollIntoView({
       behavior: "smooth",
-      block: "center",
+      block: "start",
     });
   
     setFocusedMessageId(messageId);
   }
-  const handleMainScroll = useCallback(() => {
-    const container = messagesContainerRef.current;
-    if (!container || !mainPath.length) return;
-  
+  const handleMainScroll = useCallback((e) => {
+    console.log("scroll handler fired");
+    //const container = messagesContainerRef.current;
+    const container = e.currentTarget; 
     const containerRect = container.getBoundingClientRect();
-    const midpoint = containerRect.top + containerRect.height / 2;
-  
+    //const midpoint = containerRect.top + containerRect.height / 2;
+    const detectPoint= containerRect.top; 
     let closestId = null;
     let closestDistance = Infinity;
   
@@ -444,8 +441,8 @@ export default function ChatPage() {
       if (!el) continue;
   
       const rect = el.getBoundingClientRect();
-      const msgMid = rect.top + rect.height / 2;
-      const distance = Math.abs(msgMid - midpoint);
+      const msgTop = rect.top;
+      const distance = Math.abs(msgTop - detectPoint);
   
       if (distance < closestDistance) {
         closestDistance = distance;
@@ -454,6 +451,7 @@ export default function ChatPage() {
     }
   
     if (closestId !== null) {
+      console.log("Focused:", closestId);
       setFocusedMessageId(closestId);
     }
   }, [mainPath]);
@@ -494,6 +492,8 @@ export default function ChatPage() {
         onBranchToggle={handleBranchToggle}
         openBranchId={branchPanel?.branchPointId ?? null}
         childrenMap={childrenMap}
+        registerMessageRef={registerMessageRef}
+        onMainScroll={handleMainScroll}
       />
 
       {branchPanel && (
