@@ -432,7 +432,14 @@ export default function ChatPage() {
     const container = e.currentTarget; 
     const containerRect = container.getBoundingClientRect();
     //const midpoint = containerRect.top + containerRect.height / 2;
-    const detectPoint= containerRect.top; 
+    const scrollTop = container.scrollTop;
+    const maxScrollTop = container.scrollHeight - container.clientHeight;
+    const progress = maxScrollTop === 0 ? 0 : scrollTop / maxScrollTop;
+    
+    // moves from top → bottom as user scrolls
+    const detectRatio = progress;
+    
+    const detectPoint = containerRect.top + containerRect.height * detectRatio;
     let closestId = null;
     let closestDistance = Infinity;
   
@@ -441,9 +448,18 @@ export default function ChatPage() {
       if (!el) continue;
   
       const rect = el.getBoundingClientRect();
-      const msgTop = rect.top;
-      const distance = Math.abs(msgTop - detectPoint);
-  
+      let distance;
+
+      if (detectPoint >= rect.top && detectPoint <= rect.bottom) {
+        distance = 0;
+      } 
+      else {
+        const distanceToTop = Math.abs(rect.top - detectPoint);
+        const distanceToBottom = Math.abs(rect.bottom - detectPoint);
+
+        distance = Math.min(distanceToTop, distanceToBottom);
+      }
+
       if (distance < closestDistance) {
         closestDistance = distance;
         closestId = msg.id;
