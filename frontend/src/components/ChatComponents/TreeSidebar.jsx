@@ -44,10 +44,16 @@ const styles = {
     cursor: "pointer",
     zIndex: 2,
   },
-  activeNode: {
+  leftFocusedNode: {
     background: "#d8dcc8",
-    scale: "1.2",
-  },
+    scale: "1.25",
+ },
+ 
+ rightFocusedNode: {
+   background: "#9fb39f",
+   scale: "1.25",
+   boxShadow: "0 0 0 3px rgba(159, 179, 159, 0.35)",
+ }, 
   mainVertical: {
     position: "absolute",
     left: "5px",
@@ -79,6 +85,24 @@ const styles = {
 };
 
 
+function findLatestVisibleLeaf(startId, childrenMap) {
+  let currentId = startId;
+
+  while (true) {
+    const children = getChildren(childrenMap, currentId);
+
+    const continuationChild = children.find(
+      (child) => child.branch_from_message_id !== currentId
+    );
+
+    if (!continuationChild) {
+      return currentId;
+    }
+
+    currentId = continuationChild.id;
+  }
+}
+
 function getChildren(childrenMap, messageID) {
     return childrenMap.get(messageID) || [];
 }
@@ -97,8 +121,10 @@ function getSubtreeHeight(node, childrenMap) {
     return Math.max(BRANCH_Y_STEP, total);
 }
 
-function BranchSubtree({ node, childrenMap, onBranchToggle, x, y }) {
+function BranchSubtree({ node, childrenMap, onBranchToggle, x, y, leftFocusedMessageId, rightFocusedMessageId, sourceLeafId, sourceBranchPointId, containingBranchPointId }) {
   const children = getChildren(childrenMap, node.id);
+  const isLeftFocused = node.id === leftFocusedMessageId;
+  const isRightFocused = node.id === rightFocusedMessageId;
 
   return (
     <>
@@ -106,9 +132,15 @@ function BranchSubtree({ node, childrenMap, onBranchToggle, x, y }) {
         type="button"
         onClick={() => {
           const branchPointId = node.branch_from_message_id ?? node.parent_msg_id;
-          onBranchToggle?.(branchPointId, node.id);
+          onBranchToggle?.(branchPointId, node.id, sourceLeafId ?? node.id, sourceBranchPointId);
         }}
-        style={{ ...styles.branchNode, left: `${x}px`, top: `${y}px` }}
+        style={{ 
+            ...styles.branchNode, 
+            left: `${x}px`, 
+            top: `${y}px` ,
+            ...(isLeftFocused ? styles.leftFocusedNode : {}),
+            ...(isRightFocused ? styles.rightFocusedNode : {}),
+        }}
         title={`msg ${node.id}`}
       />
 
@@ -165,6 +197,19 @@ function BranchSubtree({ node, childrenMap, onBranchToggle, x, y }) {
               onBranchToggle={onBranchToggle}
               x={childX}
               y={childY}
+              leftFocusedMessageId={leftFocusedMessageId}
+              rightFocusedMessageId={rightFocusedMessageId}
+              sourceLeafId={
+                isExplicitBranch
+                  ? findLatestVisibleLeaf(node.id, childrenMap)
+                  : sourceLeafId
+              }
+              sourceBranchPointId={
+                isExplicitBranch
+                  ? containingBranchPointId
+                  : sourceBranchPointId
+              }
+              containingBranchPointId={containingBranchPointId}
             />
           </React.Fragment>
         );
@@ -176,7 +221,8 @@ function BranchSubtree({ node, childrenMap, onBranchToggle, x, y }) {
 export default function TreeSidebar({
     mainPath = [],
     childrenMap = new Map(),
-    focusedMessageId = null,
+    leftFocusedMessageId = null,
+    rightFocusedMessageId = null,
     activeLastLeafId = null,
     onJumpToMessage,
     onBranchToggle,
@@ -206,7 +252,8 @@ export default function TreeSidebar({
           (child) => child.id !== mainBranchChildId
         );
 
-        const isFocused = msg.id === focusedMessageId;
+        const isLeftFocused = msg.id === leftFocusedMessageId;
+        const isRightFocused = msg.id === rightFocusedMessageId;
         const isActive = msg.id === activeLastLeafId;
         const hasNext = index < mainPath.length - 1;
 
@@ -232,7 +279,8 @@ export default function TreeSidebar({
               onClick={() => onJumpToMessage?.(msg.id)}
               style={{
                 ...styles.mainNode,
-                ...(isFocused ? styles.activeNode: {}),
+                ...(isLeftFocused ? styles.leftFocusedNode : {}),
+                ...(isRightFocused ? styles.rightFocusedNode : {}),
               }}
               title={`msg ${msg.id}`}
             />
@@ -272,6 +320,11 @@ export default function TreeSidebar({
                     onBranchToggle={onBranchToggle}
                     x={branchX}
                     y={branchY}
+                    leftFocusedMessageId={leftFocusedMessageId}
+                    rightFocusedMessageId={rightFocusedMessageId}
+                    sourceLeafId={activeLastLeafId}
+                    sourceBranchPointId={null}
+                    containingBranchPointId={msg.id}
                   />
                 </React.Fragment>
               );

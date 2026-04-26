@@ -82,7 +82,8 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  const [focusedMessageId, setFocusedMessageId] = useState(null);
+  const [leftFocusedMessageId, setLeftFocusedMessageId] = useState(null);
+  const [rightFocusedMessageId, setRightFocusedMessageId] = useState(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
@@ -311,19 +312,22 @@ export default function ChatPage() {
       return cleaned ? cleaned : null;
   }
 
-  function findLatestBranchLeaf(branchPointId, childrenMap) {
-    const children = childrenMap.get(branchPointId);
-    if (!children || children.length === 0) {
-      return null;
+  function findLatestBranchLeaf(startId, childrenMap) {
+    let currentId = startId;
+  
+    while (true) {
+      const children = childrenMap.get(currentId) || [];
+  
+      const continuationChild = children.find((child) => {
+        return child.branch_from_message_id !== currentId;
+      });
+  
+      if (!continuationChild) {
+        return currentId;
+      }
+  
+      currentId = continuationChild.id;
     }
-  
-    let current = children[0]; // active branch child
-  
-    while (childrenMap.get(current.id) && childrenMap.get(current.id).length > 0) {
-      current = childrenMap.get(current.id)[0];
-    }
-  
-    return current.id;
   }
 
   function handleOpenBranch(
@@ -384,6 +388,14 @@ export default function ChatPage() {
     if (!message) return;
   
     handleOpenBranch(message, null, childId, sourceLeafId, sourceBranchPointId);
+
+    if (sourceLeafId) {
+      setLeftFocusedMessageId(sourceLeafId);
+    } 
+    else {
+      setLeftFocusedMessageId(messageId);
+    }
+    setRightFocusedMessageId(leafId);
   }
 
   const mainPath = getPathToRoot(messages, mainLeafId);
@@ -397,14 +409,24 @@ export default function ChatPage() {
     : mainPath;
   const rightPath = branchPanel ? getBranchPath(messages, branchPanel.branchLeafId, branchPanel.branchPointId) : [];
 
-
   useEffect(() => {
-    if (focusedMessageId == null && mainPath.length > 0) {
-      setFocusedMessageId(mainPath[mainPath.length - 1].id);
+    if (leftFocusedMessageId == null && leftPath.length > 0) {
+      setLeftFocusedMessageId(leftPath[leftPath.length - 1].id);
     }
-  }, [mainPath]);
+  }, [leftFocusedMessageId, leftPath]);
+  
+  useEffect(() => {
+    if (!branchPanel) {
+      setRightFocusedMessageId(null);
+      return;
+    }
+  
+    if (rightFocusedMessageId == null && rightPath.length > 0) {
+      setRightFocusedMessageId(rightPath[rightPath.length - 1].id);
+    }
+  }, [branchPanel, rightFocusedMessageId, rightPath]);
 
-  function handleJumpToMessage(messageId) {
+  function handleJumpToMessage(messageId, pane = "left") {
     const el = messageRefs.current.get(messageId);
   
     if (!el) return;
@@ -414,9 +436,13 @@ export default function ChatPage() {
       block: "start",
     });
   
-    setFocusedMessageId(messageId);
-  }
-  const handleMainScroll = useCallback((e) => {
+    if (pane === "left") {
+      setLeftFocusedMessageId(messageId);
+    } else {
+      setRightFocusedMessageId(messageId);
+    }
+  } 
+  const handlePaneScroll = useCallback((pane, path) => (e) => {
     console.log("scroll handler fired");
     //const container = messagesContainerRef.current;
     const container = e.currentTarget; 
@@ -433,7 +459,7 @@ export default function ChatPage() {
     let closestId = null;
     let closestDistance = Infinity;
   
-    for (const msg of mainPath) {
+    for (const msg of path) {
       const el = messageRefs.current.get(msg.id);
       if (!el) continue;
   
@@ -457,8 +483,12 @@ export default function ChatPage() {
     }
   
     if (closestId !== null) {
-      console.log("Focused:", closestId);
-      setFocusedMessageId(closestId);
+      if (pane == "left") {
+          setLeftFocusedMessageId(closestId);
+      }
+      else {
+          setRightFocusedMessageId(closestId);
+      }
     }
   }, [mainPath]);
 
@@ -479,7 +509,8 @@ export default function ChatPage() {
       <TreeSidebar
           mainPath={mainPath}
           childrenMap={childrenMap}
-          focusedMessageId={focusedMessageId}
+          leftFocusedMessageId={leftFocusedMessageId}
+          rightFocusedMessageId={rightFocusedMessageId}
           activeLastLeafId={mainLeafId}
           onJumpToMessage={handleJumpToMessage}
           onBranchToggle={handleBranchToggle}      
@@ -500,7 +531,7 @@ export default function ChatPage() {
           childrenMap={childrenMap}
           openBranchId={null}
           registerMessageRef={registerMessageRef}
-          onMainScroll={handleMainScroll}
+          onMainScroll={handlePaneScroll("left", mainPath)}
           onBranchToggle={(messageId, childId) =>
             handleBranchToggle(messageId, childId, mainLeafId)
           }
@@ -535,7 +566,7 @@ export default function ChatPage() {
             childrenMap={childrenMap}
             openBranchId={branchPanel.branchPointId}
             registerMessageRef={registerMessageRef}
-            onMainScroll={handleMainScroll}
+            onMainScroll={handlePaneScroll("left", leftPath)}
             onBranchToggle={(messageId, childId) =>
               handleBranchToggle(messageId, childId, branchPanel.trunkLeafId, branchPanel.trunkBranchPointId)
             }
@@ -576,7 +607,7 @@ export default function ChatPage() {
             branchPointId={branchPanel.branchPointId}
             branchFromText={branchPanel.branchFromText}
             registerMessageRef={registerMessageRef}
-            onMainScroll={handleMainScroll}
+            onMainScroll={handlePaneScroll("right", rightPath)}
             onBranchToggle={(messageId, childId) =>
               handleBranchToggle(messageId, childId, branchPanel.branchLeafId, branchPanel.branchPointId)
             }
