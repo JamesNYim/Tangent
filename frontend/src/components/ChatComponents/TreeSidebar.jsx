@@ -97,68 +97,80 @@ function getSubtreeHeight(node, childrenMap) {
     return Math.max(BRANCH_Y_STEP, total);
 }
 
-function BranchSubtree({node, childrenMap, originalBranchPoint, onBranchToggle, x, y}) {
-    const children = getChildren(childrenMap, node.id);
+function BranchSubtree({ node, childrenMap, onBranchToggle, x, y }) {
+  const children = getChildren(childrenMap, node.id);
 
-    // Draw node
-    return (
-        <>
-            <button
-                type="button"
-                onClick={() => {onBranchToggle?.(originalBranchPoint.id, node.id)}}
-                style={{...styles.branchNode, left: `${x}px`, top: `${y}px`}}
-                title={`msg ${node.id}`}
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => {
+          const branchPointId = node.branch_from_message_id ?? node.parent_msg_id;
+          onBranchToggle?.(branchPointId, node.id);
+        }}
+        style={{ ...styles.branchNode, left: `${x}px`, top: `${y}px` }}
+        title={`msg ${node.id}`}
+      />
+
+      {children.map((child, index) => {
+        const previousSiblings = children.slice(0, index);
+      
+        let priorHeight = 0;
+        for (const sibling of previousSiblings) {
+          priorHeight += getSubtreeHeight(sibling, childrenMap);
+        }
+      
+        const isExplicitBranch =
+          child.branch_from_message_id === node.id;
+      
+        const childX = isExplicitBranch
+          ? x + BRANCH_X_STEP
+          : x;
+      
+        const childY = isExplicitBranch
+          ? y
+          : y + BRANCH_Y_STEP + priorHeight;
+      
+        const parentCenterX = x + NODE_SIZE / 2;
+        const parentCenterY = y + NODE_SIZE / 2;
+      
+        const childCenterX = childX + NODE_SIZE / 2;
+        const childCenterY = childY + NODE_SIZE / 2;
+      
+        return (
+          <React.Fragment key={child.id}>
+            {isExplicitBranch ? (
+              <div
+                style={{
+                  ...styles.branchHorizontal,
+                  left: `${parentCenterX}px`,
+                  top: `${parentCenterY}px`,
+                  width: `${childCenterX - parentCenterX}px`,
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  ...styles.branchVertical,
+                  left: `${parentCenterX}px`,
+                  top: `${parentCenterY}px`,
+                  height: `${childCenterY - parentCenterY}px`,
+                }}
+              />
+            )}
+      
+            <BranchSubtree
+              node={child}
+              childrenMap={childrenMap}
+              onBranchToggle={onBranchToggle}
+              x={childX}
+              y={childY}
             />
-            {children.map((child, index) => {
-                const previousSiblings = children.slice(0, index);
-
-                let priorHeight = 0;
-
-                for (const sibling of previousSiblings) {
-                    const siblingHeight = getSubtreeHeight(sibling, childrenMap);
-                    priorHeight += siblingHeight;
-                }
-
-                const childX = x;
-                const childY = y + BRANCH_Y_STEP;
-
-                const parentCenterX = x + NODE_SIZE / 2;
-                const parentCenterY = y + NODE_SIZE / 2;
-
-                const childCenterX = childX + NODE_SIZE / 2;
-                const childCenterY = childY + NODE_SIZE / 2;
-
-                return (
-                    <React.Fragment key={child.id}>
-                        <div
-                            style={{
-                                ...styles.branchHorizontal, 
-                                left: `${parentCenterX}px`, 
-                                top: `${parentCenterY}px`, 
-                                width: `${childCenterX - parentCenterX}px`,
-                            }}
-                        />
-                        <div
-                            style={{
-                                ...styles.branchVertical,
-                                left: `${childCenterX - 1}px`,
-                                top: `${parentCenterY}px`,
-                                height: `${childCenterY - parentCenterY}px`,
-                            }}
-                        />
-                        <BranchSubtree
-                            node={child}
-                            childrenMap={childrenMap}
-                            originalBranchPoint={originalBranchPoint}
-                            onBranchToggle={onBranchToggle}
-                            x={childX}
-                            y={childY}
-                        />
-                    </React.Fragment>
-                );
-            })}
-        </>
-    );
+          </React.Fragment>
+        );
+      })}
+    </>
+  );
 }
 
 export default function TreeSidebar({
