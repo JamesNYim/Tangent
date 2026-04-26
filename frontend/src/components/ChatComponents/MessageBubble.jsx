@@ -119,7 +119,8 @@ export default function MessageBubble({
     onOpenBranch?.(msg, selectedText);
   }
 
-  const isBranchPoint = branchChildren.some((child) => child.branch_from_message_id === msg.id);
+  const hasExplicitBranch = branchChildren.some((child) => child.branch_from_message_id === msg.id);
+  const isBranchPoint = branchChildren.length > 1 || hasExplicitBranch;
 
   return (
     <div

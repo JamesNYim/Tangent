@@ -262,7 +262,7 @@ export default function ChatPage() {
         method: "POST",
         body: JSON.stringify({
         content: combinedContent,
-        parent_msg_id: branchPanel.leafId,
+        parent_msg_id: branchPanel.hasStarted ? branchPanel.branchLeafId : branchPanel.branchPointId,
         branch_from_message_id: branchPanel.branchPointId,
         branch_from_text: branchPanel.branchFromText,
         }),
@@ -272,7 +272,7 @@ export default function ChatPage() {
 
       setBranchPanel((prev) => ({
         ...prev,
-        leafId: data.ai_message.id,
+        branchLeafId: data.ai_message.id,
         input: "",
         hasStarted: true,
       }));
@@ -326,76 +326,76 @@ export default function ChatPage() {
     return current.id;
   }
 
-  function handleOpenBranch(message, selectedText = null, childId = null) {
+  function handleOpenBranch(
+    message,
+    selectedText = null,
+    childId = null,
+    sourceLeafId = null,
+    sourceBranchPointId = null
+  ) {
     const cleanedText = normalizeSelectedText(selectedText);
   
-    // If user highlighted text, treat this as starting a NEW branch draft
-    if (cleanedText) {
-      setBranchPanel({
-        branchPointId: message.id,
-        leafId: message.id,
-        input: "",
-        branchFromText: cleanedText,
-        hasStarted: false,
-      });
-      return;
-    }
-
-    // Specific existing child branch clicked from tree
+    // Opening an existing branch
     if (childId) {
-      const leafId = findLatestBranchLeaf(childId, childrenMap);
+      const leafId = findLatestBranchLeaf(childId, childrenMap) ?? childId;
+  
       setBranchPanel({
+        trunkLeafId: sourceLeafId ?? mainLeafId ?? message.id,
+        trunkBranchPointId: sourceBranchPointId,
+        branchLeafId: leafId,
         branchPointId: message.id,
-        leafId: leafId ?? childId,
         input: "",
         branchFromText: null,
         hasStarted: true,
       });
+  
       return;
     }
   
-    // Otherwise, open an existing branch if one already exists
-    const leafId = findLatestBranchLeaf(message.id, childrenMap);
-  
+    // Starting a new branch from highlighted text / bubble
     setBranchPanel({
+      trunkLeafId: sourceLeafId ?? mainLeafId ?? message.id,
+      trunkBranchPointId: sourceBranchPointId,
+      branchLeafId: message.id,
       branchPointId: message.id,
-      leafId: leafId ?? message.id,
       input: "",
-      branchFromText: null,
-      hasStarted: Boolean(leafId),
+      branchFromText: cleanedText,
+      hasStarted: false,
     });
   }
 
-  function handleBranchToggle(messageId, childId = null) { 
-      if (!childId) {
-          return;
-      }
-
-      const leafId = findLatestBranchLeaf(childId, childrenMap) ?? childId;
-
-      const isSameBranchOpen =
-          branchPanel &&
-          branchPanel.branchPointId === messageId &&
-          branchPanel.leafId === leafId &&
-          branchPanel.hasStarted;
-
-      if (isSameBranchOpen) {
-          setBranchPanel(null);
-          return;
-      }
-
-      setBranchPanel({
-          branchPointId: messageId,
-          leafId,
-          input: "",
-          branchFromText: null,
-          hasStarted: true,
-      });
-
-
+  function handleBranchToggle(messageId, childId = null, sourceLeafId = null, sourceBranchPointId = null) {
+    if (!childId) return;
+  
+    const leafId = findLatestBranchLeaf(childId, childrenMap) ?? childId;
+  
+    const isSameBranchOpen =
+      branchPanel &&
+      branchPanel.branchPointId === messageId &&
+      branchPanel.branchLeafId === leafId &&
+      branchPanel.hasStarted;
+  
+    if (isSameBranchOpen) {
+      setBranchPanel(null);
+      return;
+    }
+  
+    const message = messages.find((msg) => msg.id === messageId);
+    if (!message) return;
+  
+    handleOpenBranch(message, null, childId, sourceLeafId, sourceBranchPointId);
   }
 
   const mainPath = getPathToRoot(messages, mainLeafId);
+  const leftPath = branchPanel ? branchPanel.trunkBranchPointId
+    ? getBranchPath(
+        messages,
+        branchPanel.trunkLeafId,
+        branchPanel.trunkBranchPointId
+    )
+    : getPathToRoot(messages, branchPanel.trunkLeafId)
+    : mainPath;
+  const rightPath = branchPanel ? getBranchPath(messages, branchPanel.branchLeafId, branchPanel.branchPointId) : [];
 
 
   useEffect(() => {
@@ -403,16 +403,6 @@ export default function ChatPage() {
       setFocusedMessageId(mainPath[mainPath.length - 1].id);
     }
   }, [mainPath]);
-
-  let branchPath = [];
-
-  if (branchPanel && branchPanel.hasStarted) {
-    branchPath = getBranchPath(
-      messages,
-      branchPanel.leafId,
-      branchPanel.branchPointId
-    );
-  }
 
   function handleJumpToMessage(messageId) {
     const el = messageRefs.current.get(messageId);
@@ -494,44 +484,105 @@ export default function ChatPage() {
           onJumpToMessage={handleJumpToMessage}
           onBranchToggle={handleBranchToggle}      
       />
-      <ChatWindow
-        position={branchPanel ? "left" : "single"}
-        error={error}
-        selectedConversationId={selectedConversationId}
-        loadingMessages={loadingMessages}
-        messages={mainPath}
-        input={input}
-        setInput={setInput}
-        onSendMessage={handleSendMessage}
-        sending={sending}
-        onOpenBranch={handleOpenBranch}
-        onBranchToggle={handleBranchToggle}
-        openBranchId={branchPanel?.branchPointId ?? null}
-        childrenMap={childrenMap}
-        registerMessageRef={registerMessageRef}
-        onMainScroll={handleMainScroll}
-      />
-
-      {branchPanel && (
-      <ChatWindow
-        position={"right"}
-        error={error}
-        selectedConversationId={selectedConversationId}
-        loadingMessages={false}
-        messages={branchPath}
-        input={branchPanel.input}
-        setInput={(val) =>
-          setBranchPanel((prev) => ({ ...prev, input: val }))
-        }
-        onSendMessage={handleSendBranchMessage}
-        sending={sending}
-        onSelectMessage={(id) =>
-          setBranchPanel((prev) => ({ ...prev, leafId: id }))
-        }
-        branchPointId={branchPanel.branchPointId}
-        branchFromText={branchPanel.branchFromText}
-      />
-    )}
+      {!branchPanel ? (
+        <ChatWindow
+          position="single"
+          error={error}
+          selectedConversationId={selectedConversationId}
+          loadingMessages={loadingMessages}
+          messages={mainPath}
+          input={input}
+          setInput={setInput}
+          onSendMessage={handleSendMessage}
+          sending={sending}
+          onSelectMessage={setMainLeafId}
+          onOpenBranch={handleOpenBranch}
+          childrenMap={childrenMap}
+          openBranchId={null}
+          registerMessageRef={registerMessageRef}
+          onMainScroll={handleMainScroll}
+          onBranchToggle={(messageId, childId) =>
+            handleBranchToggle(messageId, childId, mainLeafId)
+          }
+        />
+      ) : (
+        <>
+          <ChatWindow
+            position="left"
+            error={error}
+            selectedConversationId={selectedConversationId}
+            loadingMessages={loadingMessages}
+            messages={leftPath}
+            input={input}
+            setInput={setInput}
+            onSendMessage={handleSendMessage}
+            sending={sending}
+            onSelectMessage={(msg) => {
+              setBranchPanel((prev) => ({
+                ...prev,
+                trunkLeafId: msg.id,
+              }));
+            }}
+            onOpenBranch={(message, selectedText, childId) =>
+              handleOpenBranch(
+                message,
+                selectedText,
+                childId,
+                branchPanel.trunkLeafId,
+                branchPanel.trunkBranchPointId,
+              )
+            }
+            childrenMap={childrenMap}
+            openBranchId={branchPanel.branchPointId}
+            registerMessageRef={registerMessageRef}
+            onMainScroll={handleMainScroll}
+            onBranchToggle={(messageId, childId) =>
+              handleBranchToggle(messageId, childId, branchPanel.trunkLeafId, branchPanel.trunkBranchPointId)
+            }
+          />
+      
+          <ChatWindow
+            position="right"
+            error={error}
+            selectedConversationId={selectedConversationId}
+            loadingMessages={loadingMessages}
+            messages={rightPath}
+            input={branchPanel.input}
+            setInput={(value) =>
+              setBranchPanel((prev) => ({
+                ...prev,
+                input: value,
+              }))
+            }
+            onSendMessage={handleSendBranchMessage}
+            sending={sending}
+            onSelectMessage={(msg) => {
+              setBranchPanel((prev) => ({
+                ...prev,
+                branchLeafId: msg.id,
+              }));
+            }}
+            onOpenBranch={(message, selectedText, childId) =>
+              handleOpenBranch(
+                message,
+                selectedText,
+                childId,
+                branchPanel.branchLeafId,
+                branchPanel.branchPointId
+              )
+            } 
+            childrenMap={childrenMap}
+            openBranchId={branchPanel.branchPointId}
+            branchPointId={branchPanel.branchPointId}
+            branchFromText={branchPanel.branchFromText}
+            registerMessageRef={registerMessageRef}
+            onMainScroll={handleMainScroll}
+            onBranchToggle={(messageId, childId) =>
+              handleBranchToggle(messageId, childId, branchPanel.branchLeafId, branchPanel.branchPointId)
+            }
+          />
+        </>
+      )}
     </div>
   );
 }
