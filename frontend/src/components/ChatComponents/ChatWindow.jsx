@@ -1,6 +1,6 @@
 import MessageList from "./MessageList";
 import MessageInput from "./MessageInput";
-
+import { getMessageLabel }from "../../api/messageHelpers"
 
 function getBorderRadius(position) {
   switch (position) {
@@ -66,12 +66,11 @@ const styles = {
   }),
   branchHeader: {
     padding: "12px",
-    borderBottom: "1px solid #798262",
   },
   branchMeta: {
     fontSize: "12px",
     opacity: 0.8,
-    marginBottom: "6px",
+    color: "#f5f5dc",
   },
   branchText: {
     fontSize: "13px",
@@ -110,28 +109,25 @@ export default function ChatWindow({
   childrenMap,
   registerMessageRef,
   onMainScroll,
+  onJumpToMessage,
+  branchFromMessage = null,
 }) 
 {
   const inputDisabled = !selectedConversationId || sending;
 
     return (
     <main style={styles.main(position)}>
-      {(branchPointId || branchFromText) && (
         <div style={styles.branchHeader}>
-          {branchPointId && (
             <div style={styles.branchMeta}>
-              Branching from message #{branchPointId}
+              {branchFromMessage ? `Branching from “${getMessageLabel(branchFromMessage)}”` : "Main Trunk"}
             </div>
-          )}
-
           {branchFromText && (
             <div style={styles.branchText}>
               <strong>Selection:</strong> “{branchFromText}”
             </div>
           )}
         </div>
-    )}  
-      <div style={styles.messagesArea} onScroll={onMainScroll}>
+    <div style={styles.messagesArea} onScroll={onMainScroll}>
         {error && <p style={styles.error}>{error}</p>}
 
         {selectedConversationId == null ? (

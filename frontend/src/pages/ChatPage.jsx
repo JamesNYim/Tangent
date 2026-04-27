@@ -2,6 +2,8 @@ import { useMemo, useRef, useState, useEffect, useCallback } from "react";
 import ConversationSidebar from "../components/ChatComponents/ConversationSidebar";
 import ChatWindow from "../components/ChatComponents/ChatWindow";
 import TreeSidebar from "../components/ChatComponents/TreeSidebar";
+import Breadcrumb from "../components/ChatComponents/Breadcrumb";
+
 import { api }  from "../api/client"; 
 
 import {
@@ -21,6 +23,18 @@ const styles = {
     width: "100vw",
     background: "#3e4d44",
     color: "#f5f5d3"
+  },
+  chatArea: {
+    flex: 1,
+    display: "flex",
+    flexDirection: "column",
+    minWidth: 0,
+  },
+  
+  panes: {
+    flex: 1,
+    display: "flex",
+    minHeight: 0,
   },
 };
 
@@ -504,8 +518,6 @@ export default function ChatPage() {
         onRenameConversation={handleRenameConversation}
         onDeleteConversation={handleDeleteConversation}
       />
-
-  
       <TreeSidebar
           mainPath={mainPath}
           childrenMap={childrenMap}
@@ -515,105 +527,123 @@ export default function ChatPage() {
           onJumpToMessage={handleJumpToMessage}
           onBranchToggle={handleBranchToggle}      
       />
-      {!branchPanel ? (
-        <ChatWindow
-          position="single"
-          error={error}
-          selectedConversationId={selectedConversationId}
-          loadingMessages={loadingMessages}
-          messages={mainPath}
-          input={input}
-          setInput={setInput}
-          onSendMessage={handleSendMessage}
-          sending={sending}
-          onSelectMessage={setMainLeafId}
-          onOpenBranch={handleOpenBranch}
-          childrenMap={childrenMap}
-          openBranchId={null}
-          registerMessageRef={registerMessageRef}
-          onMainScroll={handlePaneScroll("left", mainPath)}
-          onBranchToggle={(messageId, childId) =>
-            handleBranchToggle(messageId, childId, mainLeafId)
-          }
+      <div style = {styles.chatArea}>
+
+        <Breadcrumb
+          branchPanel={branchPanel}
+          messages={messages}
         />
-      ) : (
-        <>
+
+        <div style={styles.panes}>
+          {!branchPanel ? (
           <ChatWindow
-            position="left"
+            position="single"
             error={error}
             selectedConversationId={selectedConversationId}
             loadingMessages={loadingMessages}
-            messages={leftPath}
+            messages={mainPath}
             input={input}
             setInput={setInput}
             onSendMessage={handleSendMessage}
             sending={sending}
-            onSelectMessage={(msg) => {
-              setBranchPanel((prev) => ({
-                ...prev,
-                trunkLeafId: msg.id,
-              }));
-            }}
-            onOpenBranch={(message, selectedText, childId) =>
-              handleOpenBranch(
-                message,
-                selectedText,
-                childId,
-                branchPanel.trunkLeafId,
-                branchPanel.trunkBranchPointId,
-              )
-            }
+            onSelectMessage={setMainLeafId}
+            onOpenBranch={handleOpenBranch}
             childrenMap={childrenMap}
-            openBranchId={branchPanel.branchPointId}
+            openBranchId={null}
             registerMessageRef={registerMessageRef}
-            onMainScroll={handlePaneScroll("left", leftPath)}
+            onMainScroll={handlePaneScroll("left", mainPath)}
             onBranchToggle={(messageId, childId) =>
-              handleBranchToggle(messageId, childId, branchPanel.trunkLeafId, branchPanel.trunkBranchPointId)
+              handleBranchToggle(messageId, childId, mainLeafId)
             }
           />
+          ) : (
+          <>
+            <ChatWindow
+              position="left"
+              error={error}
+              selectedConversationId={selectedConversationId}
+              loadingMessages={loadingMessages}
+              messages={leftPath}
+              input={input}
+              setInput={setInput}
+              onSendMessage={handleSendMessage}
+              sending={sending}
+              onSelectMessage={(msg) => {
+                setBranchPanel((prev) => ({
+                  ...prev,
+                  trunkLeafId: msg.id,
+                }));
+              }}
+              onOpenBranch={(message, selectedText, childId) =>
+                handleOpenBranch(
+                  message,
+                  selectedText,
+                  childId,
+                  branchPanel.trunkLeafId,
+                  branchPanel.trunkBranchPointId,
+                )
+              }
+              childrenMap={childrenMap}
+              openBranchId={branchPanel.branchPointId}
+              registerMessageRef={registerMessageRef}
+              onMainScroll={handlePaneScroll("left", leftPath)}
+              onBranchToggle={(messageId, childId) =>
+                handleBranchToggle(messageId, childId, branchPanel.trunkLeafId, branchPanel.trunkBranchPointId)
+              }
+              onJumpToMessage={(id) => handleJumpToMessage(id, "left")}
+              branchFromMessage={
+                branchPanel.trunkBranchPointId ? messages.find((m) => m.id === branchPanel.trunkBranchPointId) : null
+              }
+            />
       
-          <ChatWindow
-            position="right"
-            error={error}
-            selectedConversationId={selectedConversationId}
-            loadingMessages={loadingMessages}
-            messages={rightPath}
-            input={branchPanel.input}
-            setInput={(value) =>
-              setBranchPanel((prev) => ({
-                ...prev,
-                input: value,
-              }))
-            }
-            onSendMessage={handleSendBranchMessage}
-            sending={sending}
-            onSelectMessage={(msg) => {
-              setBranchPanel((prev) => ({
-                ...prev,
-                branchLeafId: msg.id,
-              }));
-            }}
-            onOpenBranch={(message, selectedText, childId) =>
-              handleOpenBranch(
-                message,
-                selectedText,
-                childId,
-                branchPanel.branchLeafId,
-                branchPanel.branchPointId
-              )
-            } 
-            childrenMap={childrenMap}
-            openBranchId={branchPanel.branchPointId}
-            branchPointId={branchPanel.branchPointId}
-            branchFromText={branchPanel.branchFromText}
-            registerMessageRef={registerMessageRef}
-            onMainScroll={handlePaneScroll("right", rightPath)}
-            onBranchToggle={(messageId, childId) =>
-              handleBranchToggle(messageId, childId, branchPanel.branchLeafId, branchPanel.branchPointId)
-            }
-          />
-        </>
-      )}
+            <ChatWindow
+              position="right"
+              error={error}
+              selectedConversationId={selectedConversationId}
+              loadingMessages={loadingMessages}
+              messages={rightPath}
+              input={branchPanel.input}
+              setInput={(value) =>
+                setBranchPanel((prev) => ({
+                  ...prev,
+                  input: value,
+                }))
+              }
+              onSendMessage={handleSendBranchMessage}
+              sending={sending}
+              onSelectMessage={(msg) => {
+                setBranchPanel((prev) => ({
+                  ...prev,
+                  branchLeafId: msg.id,
+                }));
+              }}
+              onOpenBranch={(message, selectedText, childId) =>
+                handleOpenBranch(
+                  message,
+                  selectedText,
+                  childId,
+                  branchPanel.branchLeafId,
+                  branchPanel.branchPointId
+                )
+              } 
+              childrenMap={childrenMap}
+              openBranchId={branchPanel.branchPointId}
+              branchPointId={branchPanel.branchPointId}
+              branchFromText={branchPanel.branchFromText}
+              registerMessageRef={registerMessageRef}
+              onMainScroll={handlePaneScroll("right", rightPath)}
+              onBranchToggle={(messageId, childId) =>
+                handleBranchToggle(messageId, childId, branchPanel.branchLeafId, branchPanel.branchPointId)
+              }
+              onJumpToMessage={(id) => handleJumpToMessage(id, "right")}
+              branchFromMessage={
+                messages.find((m) => m.id === branchPanel?.branchPointId)
+              }
+            />
+          </>
+        )}  
+      </div>
+    </div>
     </div>
   );
 }
