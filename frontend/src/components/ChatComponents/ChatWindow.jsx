@@ -127,7 +127,7 @@ export default function ChatWindow({
             </div>
           )}
         </div>
-    <div style={styles.messagesArea} onScroll={onMainScroll}>
+    <div style={styles.messagesArea} className="hide-scrollbar" onScroll={onMainScroll}>
         {error && <p style={styles.error}>{error}</p>}
 
         {selectedConversationId == null ? (
