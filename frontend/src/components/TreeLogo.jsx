@@ -19,9 +19,9 @@ const NESTED_BRANCH_CHANCE = 0.45;
 const TREE_PADDING = 40;
 
 const styles = {
-  shell: {
+  treeshell: {
     width: `${SHELL_WIDTH}px`,
-    height: `${SHELL_HEIGHT}px`,
+    height: "100%",
     background: "transparent",
     border: "none",
     padding: 0,
@@ -344,7 +344,7 @@ export default function TreeLogo() {
   }, [seed]);
 
   return (
-    <div style={styles.shell} className="hide-scrollbar">
+    <div style={styles.treeshell} className="hide-scrollbar">
       <div style={{...styles.canvas, width: `${tree.canvasWidth}px`, height: `${tree.canvasHeight}px`}}>
         {tree.lines.map((line) => {
           const isVertical = line.x1 === line.x2;

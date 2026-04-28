@@ -6,16 +6,14 @@ import RegisterButton from "../components/RegisterButton";
 
 const styles = {
   page: {
-    minHeight: "100vh",
-    background: "#2f2220",
-    color: "#f5f5dc",
+    flex: 1,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    padding: "24px",
-  },
-
-  card: {
+    minHeight: 0,
+    minWidth: 0,
+   },
+   logincard: {
     width: "100%",
     maxWidth: "420px",
     background: "#3e4d44",
@@ -106,7 +104,7 @@ export default function LoginPage() {
 
   return (
     <div style={styles.page}>
-      <div style={styles.card}>
+      <div style={styles.logincard}>
         <h2 style={styles.title}>Login</h2>
 
         <form style={styles.form} onSubmit={onSubmit}>
