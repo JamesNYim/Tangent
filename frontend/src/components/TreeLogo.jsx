@@ -16,6 +16,8 @@ const BRANCH_CHANCE = 0.7;
 const MAX_NESTED_BRANCH_DEPTH = 2;
 const NESTED_BRANCH_CHANCE = 0.45;
 
+const TREE_PADDING = 40;
+
 const styles = {
   shell: {
     width: `${SHELL_WIDTH}px`,
@@ -24,14 +26,12 @@ const styles = {
     border: "none",
     padding: 0,
     position: "relative",
-    overflow: "hidden",
+    overflow: "auto",
     boxShadow: "none",
   },
 
   canvas: {
     position: "relative",
-    width: "100%",
-    height: "100%",
   },
 
   node: {
@@ -49,7 +49,7 @@ const styles = {
   },
 
   activeNode: {
-    background: "#9fb39f",
+    background: "#d8dcc8",
     transform: "scale(1.25)",
     boxShadow: "0 0 0 3px rgba(159, 179, 159, 0.35)",
   },
@@ -304,10 +304,19 @@ function centerTree(tree, shellWidth, shellHeight) {
   const treeWidth = maxX - minX;
   const treeHeight = maxY - minY;
 
-  const offsetX = shellWidth / 2 - (minX + treeWidth / 2);
-  const offsetY = shellHeight / 2 - (minY + treeHeight / 2);
+  const canvasWidth = Math.max(shellWidth, treeWidth + TREE_PADDING * 2);
+  const canvasHeight = Math.max(shellHeight, treeHeight + TREE_PADDING * 2);
+
+  const offsetX =
+    canvasWidth / 2 - (minX + treeWidth / 2);
+
+  const offsetY =
+    canvasHeight / 2 - (minY + treeHeight / 2);
 
   return {
+    canvasWidth,
+    canvasHeight,
+
     nodes: tree.nodes.map((node) => ({
       ...node,
       x: node.x + offsetX,
@@ -335,8 +344,8 @@ export default function TreeLogo() {
   }, [seed]);
 
   return (
-    <div style={styles.shell}>
-      <div style={styles.canvas}>
+    <div style={styles.shell} className="hide-scrollbar">
+      <div style={{...styles.canvas, width: `${tree.canvasWidth}px`, height: `${tree.canvasHeight}px`}}>
         {tree.lines.map((line) => {
           const isVertical = line.x1 === line.x2;
 
