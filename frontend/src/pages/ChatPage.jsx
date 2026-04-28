@@ -3,6 +3,7 @@ import ConversationSidebar from "../components/ChatComponents/ConversationSideba
 import ChatWindow from "../components/ChatComponents/ChatWindow";
 import TreeSidebar from "../components/ChatComponents/TreeSidebar";
 import Breadcrumb from "../components/ChatComponents/Breadcrumb";
+import AccountWidget from "../components/ProfileComponents/AccountWidget";
 
 import { api }  from "../api/client"; 
 
@@ -38,6 +39,12 @@ const styles = {
     minWidth: 0,
     gap: 0,
     width: "100%",
+  },
+  accountButton: {
+    width: "240px",
+    position: "absolute", 
+    bottom: 16, 
+    left: 12,
   },
 };
 
@@ -521,6 +528,15 @@ export default function ChatPage() {
         onRenameConversation={handleRenameConversation}
         onDeleteConversation={handleDeleteConversation}
       />
+      <div style={styles.accountButton}>
+        <AccountWidget
+          user={{
+            name: "James Yim",
+            email: "james@example.com",
+          }}
+          onLogout={() => console.log("logout")}
+        />
+      </div>
       <TreeSidebar
           mainPath={mainPath}
           childrenMap={childrenMap}
