@@ -13,20 +13,24 @@ import ChatPage from "./pages/ChatPage";
 export default function App() {
   return (
     <BrowserRouter>
-        <AuthProvider>
-          <Routes>
-            <Route path="*" element={<div>404</div>} />
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/register" element={<RegisterPage />} />
-            <Route path="/" element={
-                <RequireAuth>
-                    <ChatPage />
-                </RequireAuth>
-            }/>
-          </Routes>
-        </AuthProvider>
+      <AuthProvider>
+        <Routes>
+          <Route path="*" element={<div>404</div>} />
+
+          <Route path="/" element={<HomePage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+
+          <Route
+            path="/chat"
+            element={
+              <RequireAuth>
+                <ChatPage />
+              </RequireAuth>
+            }
+          />
+        </Routes>
+      </AuthProvider>
     </BrowserRouter>
   );
 }
-
-

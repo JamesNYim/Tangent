@@ -98,7 +98,7 @@ export default function LoginPage() {
       }
 
       await setSessionFromToken(token);
-      nav("/");
+      nav("/chat");
     } catch (error) {
       setErr(error.message);
     }
