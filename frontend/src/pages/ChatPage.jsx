@@ -20,7 +20,7 @@ const styles = {
   page: {
     display: "flex",
     height: "100vh",
-    width: "100vw",
+    width: "100%",
     background: "#3e4d44",
     color: "#f5f5d3"
   },
@@ -35,6 +35,9 @@ const styles = {
     flex: 1,
     display: "flex",
     minHeight: 0,
+    minWidth: 0,
+    gap: 0,
+    width: "100%",
   },
 };
 
