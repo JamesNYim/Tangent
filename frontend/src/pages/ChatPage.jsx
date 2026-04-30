@@ -41,10 +41,9 @@ const styles = {
     width: "100%",
   },
   accountButton: {
-    width: "240px",
     position: "absolute", 
     bottom: 16, 
-    left: 12,
+    left: 16,
   },
 };
 

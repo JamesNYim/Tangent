@@ -305,7 +305,7 @@ const styles = {
     width: "28px",
     height: "28px",
     borderRadius: "50%",
-    background: "#798262",
+    background: "#a9b192",
     color: "#f5f5dc",
     display: "flex",
     alignItems: "center",
