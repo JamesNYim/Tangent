@@ -655,7 +655,7 @@ export default function ChatPage() {
               }
               onJumpToMessage={(id) => handleJumpToMessage(id, "right")}
               branchFromMessage={
-                messages.find((m) => m.id === branchPanel?.branchPointId)
+                branchPanel.branchPointId? messages.find((m) => m.id === branchPanel.branchPointId) : null
               }
             />
           </>
