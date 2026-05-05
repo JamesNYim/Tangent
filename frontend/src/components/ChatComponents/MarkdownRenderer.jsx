@@ -1,86 +1,87 @@
-import React from 'react';
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 const styles = {
-  inlineCode: {
-    background: "#222",
+  paragraph: {
+    margin: 0,
+  },
+
+  list: {
+    margin: "6px 0",
+    paddingLeft: "18px",
+  },
+
+  codeInline: {
+    background: "#2a2d26",
     padding: "2px 6px",
-    borderRadius: "4px",
+    borderRadius: "6px",
     fontSize: "0.9em",
   },
-  codeBlockWrap: {
-    marginTop: "8px",
-  },
-  codeHeader: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    background: "#1e1e1e",
-    color: "#f5f5d3",
-    fontSize: "12px",
-    padding: "6px 10px",
-    borderTopLeftRadius: "8px",
-    borderTopRightRadius: "8px",
-  },
+
   codeBlock: {
-    background: "#1e1e1e",
-    padding: "12px",
+    background: "#2a2d26",
+    padding: "10px",
+    borderRadius: "8px",
     overflowX: "auto",
-    margin: 0,
-    borderBottomLeftRadius: "8px",
-    borderBottomRightRadius: "8px",
+    margin: "8px 0",
+    fontSize: "0.9em",
   },
-  codeText: {
-    fontFamily: "monospace",
-    fontSize: "13px",
+
+  blockquote: {
+    borderLeft: "3px solid #bb8954",
+    paddingLeft: "10px",
+    margin: "8px 0",
+    opacity: 0.9,
+  },
+
+  table: {
+    borderCollapse: "collapse",
+    margin: "8px 0",
+    width: "100%",
+  },
+
+  th: {
+    borderBottom: "1px solid #666",
+    padding: "6px",
+    textAlign: "left",
+  },
+
+  td: {
+    borderBottom: "1px solid #444",
+    padding: "6px",
   },
 };
 
-function MarkdownRenderer({ content }) {
+export default function MarkdownRenderer({ content }) {
   return (
-    <div>
-      <ReactMarkdown
-        remarkPlugins={[remarkGfm]}
-        components={{
-          code({ inline, className, children, ...props }) {
-            const match = /language-(\w+)/.exec(className || "");
-            const language = match?.[1];
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ children }) => <p style={styles.paragraph}>{children}</p>,
 
-            if (inline) {
-              return (
-                <code style={styles.inlineCode} {...props}>
-                  {children}
-                </code>
-              );
-            }
+        ul: ({ children }) => <ul style={styles.list}>{children}</ul>,
+        ol: ({ children }) => <ol style={styles.list}>{children}</ol>,
 
-            return (
-              <div style={styles.codeBlockWrap}>
-                {language && (
-                  <div style={styles.codeHeader}>
-                    <span>{language}</span>
-                  </div>
-                )}
+        code({ inline, children }) {
+          return inline ? (
+            <code style={styles.codeInline}>{children}</code>
+          ) : (
+            <pre style={styles.codeBlock}>
+              <code>{children}</code>
+            </pre>
+          );
+        },
 
-                <pre style={styles.codeBlock}>
-                  <code className={className} style={styles.codeText} {...props}>
-                    {children}
-                  </code>
-                </pre>
-              </div>
-            );
-          },
+        blockquote: ({ children }) => (
+          <blockquote style={styles.blockquote}>{children}</blockquote>
+        ),
 
-          p({ children }) {
-            return <p style={{ margin: "0 0 8px" }}>{children}</p>;
-          },
-        }}
-      >
-        {content}
-      </ReactMarkdown>
-    </div>
+        table: ({ children }) => <table style={styles.table}>{children}</table>,
+        th: ({ children }) => <th style={styles.th}>{children}</th>,
+        td: ({ children }) => <td style={styles.td}>{children}</td>,
+      }}
+    >
+      {content}
+    </ReactMarkdown>
   );
 }
-
-export default React.memo(MarkdownRenderer);

@@ -6,69 +6,85 @@ const styles = {
     display: "flex",
     width: "100%",
   },
+
   bubble: {
-    maxWidth: "70%",
-    padding: "12px",
-    borderRadius: "10px",
+    maxWidth: "min(72%, 760px)",
+    padding: "12px 14px",
+    borderRadius: "16px",
     background: "#33352c",
+    color: "#f5f5d3",
     position: "relative",
-    whiteSpace: "pre-wrap",
+    lineHeight: 1.5,
+    wordBreak: "break-word",
+    overflowWrap: "anywhere",
+    minHeight: "22px",
   },
+
   userBubble: {
-    background: "#33352c",
+    borderBottomRightRadius: "4px",
   },
+
   assistantBubble: {
-    background: "#33352c",
+    borderBottomLeftRadius: "4px",
   },
+
   role: {
-    fontSize: "12px",
+    fontSize: "11px",
     fontWeight: "bold",
-    marginBottom: "4px",
+    marginBottom: "6px",
+    opacity: 0.65,
     textTransform: "capitalize",
   },
+
   content: {
-    lineHeight: 1.5,
     userSelect: "text",
     cursor: "text",
   },
-  actions: {
+
+  popup: {
+    position: "fixed",
+    zIndex: 9999,
     display: "flex",
     gap: "8px",
-    marginTop: "10px",
-    flexWrap: "wrap",
+    alignItems: "center",
+    background: "#2f2220",
+    border: "1px solid #798262",
+    borderRadius: "14px",
+    padding: "8px",
+    boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
   },
+
   button: {
     background: "#798262",
     color: "#f5f5d3",
     border: "none",
-    borderRadius: "8px",
+    borderRadius: "999px",
     padding: "6px 10px",
     cursor: "pointer",
+    fontSize: "12px",
+    whiteSpace: "nowrap",
   },
+
   secondaryButton: {
     background: "#4c2b12",
     color: "#f5f5d3",
     border: "none",
-    borderRadius: "8px",
+    borderRadius: "999px",
     padding: "6px 10px",
     cursor: "pointer",
-  },
-  selectionPreview: {
-    marginTop: "8px",
     fontSize: "12px",
-    opacity: 0.9,
-    borderLeft: "3px solid #bb8954",
-    paddingLeft: "8px",
+    whiteSpace: "nowrap",
   },
+
   branchButton: {
     position: "absolute",
-    top: "6px",
-    right: "6px",
+    top: "8px",
+    right: "8px",
     fontSize: "11px",
-    padding: "2px 6px",
-    borderRadius: "6px",
+    padding: "2px 7px",
+    borderRadius: "999px",
     border: "1px solid #f5f5d3",
-    background: "transparent",
+    background: "rgba(0,0,0,0.12)",
     color: "#f5f5d3",
     cursor: "pointer",
     opacity: 0.8,
@@ -85,12 +101,28 @@ export default function MessageBubble({
   registerMessageRef,
 }) {
   const isUser = msg.role === "user";
+
   const [selectedText, setSelectedText] = useState("");
+  const [popupPosition, setPopupPosition] = useState(null);
 
   function captureSelection() {
     const selection = window.getSelection();
     const text = selection?.toString()?.trim() || "";
+
+    if (!text || selection.rangeCount === 0) {
+      setSelectedText("");
+      setPopupPosition(null);
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+
     setSelectedText(text);
+    setPopupPosition({
+      x: rect.left + rect.width / 2,
+      y: rect.top - 12,
+    });
   }
 
   function handleBubbleClick() {
@@ -98,33 +130,63 @@ export default function MessageBubble({
     if (selection) return;
 
     onSelectMessage?.(msg.id);
-    console.log("clicked msg: ", msg.id);
+
+    const rect = document
+      .querySelector(`[data-message-id="${msg.id}"]`)
+      ?.getBoundingClientRect();
+
+    setSelectedText("");
+    setPopupPosition({
+      x: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
+      y: rect ? rect.top - 12 : window.innerHeight / 2,
+    });
   }
 
   function clearSelection(e) {
     e.stopPropagation();
     setSelectedText("");
+    setPopupPosition(null);
     window.getSelection()?.removeAllRanges();
   }
 
   function handleBranchWholeMessage(e) {
     e.stopPropagation();
-    setSelectedText("");
     onOpenBranch?.(msg, null);
+    setPopupPosition(null);
+    setSelectedText("");
   }
 
   function handleBranchSelection(e) {
     e.stopPropagation();
     if (!selectedText.trim()) return;
+
     onOpenBranch?.(msg, selectedText);
+    setPopupPosition(null);
+    setSelectedText("");
   }
 
-  const hasExplicitBranch = branchChildren.some((child) => child.branch_from_message_id === msg.id);
-  const isBranchPoint = branchChildren.length > 1 || hasExplicitBranch;
+  function handleToggleBranch(e) {
+    e.stopPropagation();
+
+    const firstBranchChild = branchChildren.find(
+      (child) => child.branch_from_message_id === msg.id
+    );
+
+    if (!firstBranchChild) return;
+
+    onBranchToggle?.(msg.id, firstBranchChild.id);
+  }
+
+  const explicitBranchChildren = branchChildren.filter(
+    (child) => child.branch_from_message_id === msg.id
+  );
+
+  const isBranchPoint = explicitBranchChildren.length > 0;
 
   return (
     <div
       ref={(el) => registerMessageRef?.(msg.id, el)}
+      data-message-id={msg.id}
       style={{
         ...styles.row,
         justifyContent: isUser ? "flex-end" : "flex-start",
@@ -135,6 +197,7 @@ export default function MessageBubble({
         style={{
           ...styles.bubble,
           ...(isUser ? styles.userBubble : styles.assistantBubble),
+          paddingRight: isBranchPoint ? "38px" : "14px",
         }}
       >
         <div style={styles.role}>{msg.role}</div>
@@ -143,50 +206,60 @@ export default function MessageBubble({
           style={styles.content}
           onMouseUp={(e) => {
             captureSelection();
+
             const selection = window.getSelection()?.toString()?.trim() || "";
             if (selection) e.stopPropagation();
           }}
           onKeyUp={captureSelection}
         >
-          <MarkdownRenderer content={msg.content}/>
+          <MarkdownRenderer content={msg.content || ""} />
         </div>
 
         {isBranchPoint && (
           <button
             type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              const firstBranchChild = branchChildren[0];
-              if (!firstBranchChild) return;
-              onBranchToggle?.(msg.id, firstBranchChild.id);
-            }}
+            onClick={handleToggleBranch}
             style={styles.branchButton}
           >
-            {isBranchOpen ? "▾" : "▸"} {/* branchChildren.length */}
+            {isBranchOpen ? "▾" : "▸"}
           </button>
         )}
 
-        <div style={styles.actions}>
-          <button onClick={handleBranchWholeMessage} style={styles.button}>
-            Branch message
-          </button>
+        {popupPosition && (
+          <div
+            style={{
+              ...styles.popup,
+              left: popupPosition.x,
+              top: popupPosition.y,
+              transform: "translate(-50%, -100%)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={handleBranchWholeMessage}
+              style={styles.button}
+            >
+              Branch message
+            </button>
 
-          {selectedText && (
-            <>
-              <button onClick={handleBranchSelection} style={styles.button}>
+            {selectedText && (
+              <button
+                type="button"
+                onClick={handleBranchSelection}
+                style={styles.button}
+              >
                 Branch selection
               </button>
+            )}
 
-              <button onClick={clearSelection} style={styles.secondaryButton}>
-                Clear selection
-              </button>
-            </>
-          )}
-        </div>
-
-        {selectedText && (
-          <div style={styles.selectionPreview}>
-            <strong>Selected:</strong> “{selectedText}”
+            <button
+              type="button"
+              onClick={clearSelection}
+              style={styles.secondaryButton}
+            >
+              ✕
+            </button>
           </div>
         )}
       </div>
