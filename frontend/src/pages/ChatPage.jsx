@@ -4,6 +4,7 @@ import ChatWindow from "../components/ChatComponents/ChatWindow";
 import TreeSidebar from "../components/ChatComponents/TreeSidebar";
 import Breadcrumb from "../components/ChatComponents/Breadcrumb";
 import AccountWidget from "../components/ProfileComponents/AccountWidget";
+import Sidebar from "../components/Sidebar";
 
 import { api }  from "../api/client"; 
 
@@ -518,25 +519,21 @@ export default function ChatPage() {
   const childrenMap = buildChildrenMap(messages);
   return (
     <div style={styles.page}>
-      <ConversationSidebar
-        conversations={conversations}
-        selectedConversationId={selectedConversationId}
-        loadingConversations={loadingConversations}
-        onNewChat={handleNewChat}
-        onSelectConversation={setSelectedConversationId}
-        onRenameConversation={handleRenameConversation}
-        onDeleteConversation={handleDeleteConversation}
-      />
-      <div style={styles.accountButton}>
-        <AccountWidget
-          user={{
-            name: "James Yim",
-            email: "james@example.com",
-          }}
-          onLogout={() => console.log("logout")}
-        />
-      </div>
-      <TreeSidebar
+    <Sidebar
+      conversations={conversations}
+      selectedConversationId={selectedConversationId}
+      loadingConversations={loadingConversations}
+      onNewChat={handleNewChat}
+      onSelectConversation={setSelectedConversationId}
+      onRenameConversation={handleRenameConversation}
+      onDeleteConversation={handleDeleteConversation}
+      user={{
+        name: "James Yim",
+        email: "james@example.com",
+      }}
+      onLogout={() => console.log("logout")}
+    />
+    <TreeSidebar
           mainPath={mainPath}
           childrenMap={childrenMap}
           leftFocusedMessageId={leftFocusedMessageId}
