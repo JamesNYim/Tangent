@@ -113,6 +113,20 @@ const styles = {
   },
 };
 
+function getFirstChildOfBranch(messages, clickedNodeId, branchPointId) {
+  const fullPath = getPathToRoot(messages, clickedNodeId);
+
+  const branchPointIndex = fullPath.findIndex(
+    (msg) => msg.id === branchPointId
+  );
+
+  if (branchPointIndex === -1) return clickedNodeId;
+
+  const firstChild = fullPath[branchPointIndex + 1];
+
+  return firstChild?.id ?? clickedNodeId;
+}
+
 function findLatestVisibleLeaf(startId, childrenMap) {
   let currentId = startId;
 
@@ -162,6 +176,7 @@ function BranchSubtree({
   sourceLeafId,
   sourceBranchPointId,
   containingBranchPointId,
+  rootBranchChildId,
 }) {
   const children = getChildren(childrenMap, node.id);
   const isLeftFocused = node.id === leftFocusedMessageId;
@@ -176,8 +191,8 @@ function BranchSubtree({
             node.branch_from_message_id ?? node.parent_msg_id;
 
           onBranchToggle?.(
-            branchPointId,
-            node.id,
+            containingBranchPointId,
+            rootBranchChildId,
             sourceLeafId ?? node.id,
             sourceBranchPointId
           );
@@ -236,7 +251,7 @@ function BranchSubtree({
               />
             )}
 
-            <BranchSubtree
+          <BranchSubtree
               node={child}
               childrenMap={childrenMap}
               onBranchToggle={onBranchToggle}
@@ -254,7 +269,16 @@ function BranchSubtree({
                   ? containingBranchPointId
                   : sourceBranchPointId
               }
-              containingBranchPointId={containingBranchPointId}
+              containingBranchPointId={
+                isExplicitBranch
+                  ? node.id
+                  : containingBranchPointId
+              }
+              rootBranchChildId={
+                isExplicitBranch
+                  ? child.id
+                  : rootBranchChildId
+              }
             />
           </React.Fragment>
         );
@@ -413,15 +437,17 @@ export default function TreeSidebar({
                   <BranchSubtree
                     node={child}
                     childrenMap={childrenMap}
-                    originalBranchPoint={msg}
                     onBranchToggle={onBranchToggle}
                     x={branchX}
                     y={branchY}
                     leftFocusedMessageId={leftFocusedMessageId}
                     rightFocusedMessageId={rightFocusedMessageId}
+                  
                     sourceLeafId={activeLastLeafId}
                     sourceBranchPointId={null}
+                  
                     containingBranchPointId={msg.id}
+                    rootBranchChildId={child.id}
                   />
                 </React.Fragment>
               );
