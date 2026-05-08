@@ -451,6 +451,25 @@ export default function ChatPage() {
   }, [branchPanel, rightFocusedMessageId, rightPath]);
 
   function handleJumpToMessage(messageId, pane = "left") {
+    if (pane === "single") {
+      setBranchPanel(null);
+      setLeftFocusedMessageId(messageId);
+      setRightFocusedMessageId(null);
+  
+      requestAnimationFrame(() => {
+        const el = messageRefs.current.get(messageId);
+  
+        if (!el) return;
+  
+        el.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      });
+  
+      return;
+    }
+  
     const el = messageRefs.current.get(messageId);
   
     if (!el) return;
@@ -465,7 +484,8 @@ export default function ChatPage() {
     } else {
       setRightFocusedMessageId(messageId);
     }
-  } 
+  }
+
   const handlePaneScroll = useCallback((pane, path) => (e) => {
     console.log("scroll handler fired");
     //const container = messagesContainerRef.current;

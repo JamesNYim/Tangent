@@ -396,7 +396,7 @@ export default function TreeSidebar({
           >
             <button
               type="button"
-              onClick={() => onJumpToMessage?.(msg.id)}
+              onClick={() => onJumpToMessage?.(msg.id, "single")}
               style={{
                 ...styles.mainNode,
                 ...(isLeftFocused ? styles.leftFocusedNode : {}),
