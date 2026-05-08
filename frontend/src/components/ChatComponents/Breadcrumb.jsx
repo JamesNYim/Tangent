@@ -43,33 +43,31 @@ export default function Breadcrumb({ branchPanel, messages = [] }) {
 function buildBranchTrail(branchPanel, messages) {
   if (!branchPanel) return [];
 
+  const byId = new Map(messages.map((msg) => [msg.id, msg]));
   const trail = [];
 
-  if (branchPanel.trunkBranchPointId) {
-    const trunkBranchPoint = messages.find(
-      (msg) => msg.id === branchPanel.trunkBranchPointId
-    );
+  let current = byId.get(branchPanel.branchPointId);
 
-    if (trunkBranchPoint) {
-      trail.push({
-        id: `trunk-${trunkBranchPoint.id}`,
-        label: `${getMessageLabel(trunkBranchPoint)}`,
-      });
-    }
-  }
-
-  const currentBranchPoint = messages.find(
-    (msg) => msg.id === branchPanel.branchPointId
-  );
-
-  if (currentBranchPoint) {
-    trail.push({
-      id: `current-${currentBranchPoint.id}`,
-      label:`${getMessageLabel(currentBranchPoint)}`,
+  while (current) {
+    trail.unshift({
+      id: current.id,
+      label: getMessageLabel(current),
     });
+
+    let walker = byId.get(current.parent_msg_id);
+    let parentBranchPoint = null;
+
+    while (walker) {
+      if (walker.branch_from_message_id) {
+        parentBranchPoint = byId.get(walker.branch_from_message_id);
+        break;
+      }
+
+      walker = byId.get(walker.parent_msg_id);
+    }
+
+    current = parentBranchPoint;
   }
 
   return trail;
 }
-
-
