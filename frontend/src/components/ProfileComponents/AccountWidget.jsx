@@ -1,8 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
+import { saveAPIKey } from "../../api/apiKeys";
 
 export default function AccountWidget({ user, onLogout }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const [provider, setProvider] = useState("openai");
+  const [apiKey, setApiKey] = useState("");
+  const [savingKey, setSavingKey] = useState(false);
+  const [apiKeyMessage, setApiKeyMessage] = useState("");
+
   const accountRef = useRef(null);
 
   useEffect(() => {
@@ -15,6 +22,29 @@ export default function AccountWidget({ user, onLogout }) {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  async function handleSaveApiKey(e) {
+    e.preventDefault();
+
+    if (!apiKey.trim()) {
+      setApiKeyMessage("Please enter an API key.");
+      return;
+    }
+
+    try {
+      setSavingKey(true);
+      setApiKeyMessage("");
+
+      await saveAPIKey(provider, apiKey);
+
+      setApiKey("");
+      setApiKeyMessage("API key saved.");
+    } catch (err) {
+      setApiKeyMessage(err.message || "Failed to save API key.");
+    } finally {
+      setSavingKey(false);
+    }
+  }
 
   const initials = user?.name
     ? user.name
@@ -109,6 +139,47 @@ export default function AccountWidget({ user, onLogout }) {
                   <span style={styles.value}>Floating panes</span>
                 </div>
               </div>
+
+              <div style={styles.section}>
+                <div style={styles.sectionTitle}>API Keys</div>
+
+                <form onSubmit={handleSaveApiKey} style={styles.apiKeyForm}>
+                  <label style={styles.label}>Provider</label>
+
+                  <select
+                    value={provider}
+                    onChange={(e) => setProvider(e.target.value)}
+                    style={styles.input}
+                  >
+                    <option value="openai">OpenAI</option>
+                    <option value="anthropic">Anthropic</option>
+                    <option value="google">Google</option>
+                    <option value="openrouter">OpenRouter</option>
+                  </select>
+
+                  <label style={styles.label}>API Key</label>
+
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    placeholder="Paste your API key"
+                    style={styles.input}
+                  />
+
+                  {apiKeyMessage && (
+                    <div style={styles.message}>{apiKeyMessage}</div>
+                  )}
+
+                  <button
+                    type="submit"
+                    style={styles.primaryButton}
+                    disabled={savingKey}
+                  >
+                    {savingKey ? "Saving..." : "Save API Key"}
+                  </button>
+                </form>
+              </div>
             </div>
 
             <div style={styles.footer}>
@@ -117,15 +188,7 @@ export default function AccountWidget({ user, onLogout }) {
                 style={styles.secondaryButton}
                 onClick={() => setSettingsOpen(false)}
               >
-                Cancel
-              </button>
-
-              <button
-                type="button"
-                style={styles.primaryButton}
-                onClick={() => setSettingsOpen(false)}
-              >
-                Save
+                Close
               </button>
             </div>
           </div>
@@ -139,6 +202,7 @@ const styles = {
   wrapper: {
     position: "relative",
   },
+
   menu: {
     position: "absolute",
     bottom: "44px",
@@ -150,14 +214,14 @@ const styles = {
     padding: "10px",
     boxShadow: "0 10px 30px rgba(0,0,0,0.35)",
     zIndex: 50,
-  }, 
+  },
+
   userBlock: {
     padding: "10px",
     borderBottom: "1px solid rgba(245,245,220,0.15)",
     marginBottom: "8px",
   },
 
-  
   email: {
     fontSize: "12px",
     opacity: 0.7,
@@ -194,6 +258,7 @@ const styles = {
   modal: {
     width: "100%",
     maxWidth: "520px",
+    maxHeight: "80vh",
     background: "#2f2220",
     color: "#f5f5dc",
     border: "2px solid #798262",
@@ -228,6 +293,8 @@ const styles = {
     display: "flex",
     flexDirection: "column",
     gap: "16px",
+    maxHeight: "60vh",
+    overflowY: "auto",
   },
 
   section: {
@@ -253,10 +320,32 @@ const styles = {
 
   label: {
     opacity: 0.75,
+    fontSize: "13px",
   },
 
   value: {
     fontWeight: "bold",
+  },
+
+  apiKeyForm: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "10px",
+  },
+
+  input: {
+    width: "100%",
+    padding: "10px",
+    borderRadius: "10px",
+    border: "1px solid #798262",
+    background: "#2f2220",
+    color: "#f5f5dc",
+    outline: "none",
+  },
+
+  message: {
+    fontSize: "13px",
+    opacity: 0.85,
   },
 
   footer: {
@@ -286,6 +375,7 @@ const styles = {
     cursor: "pointer",
     fontWeight: "bold",
   },
+
   accountButton: {
     width: "100%",
     height: "36px",
@@ -297,6 +387,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
   },
+
   avatar: {
     width: "28px",
     height: "28px",
@@ -308,9 +399,9 @@ const styles = {
     justifyContent: "center",
     fontSize: "12px",
     fontWeight: "bold",
-    margin:"0px 40px 0px 0px",
+    margin: "0px 40px 0px 0px",
   },
-  
+
   name: {
     flex: 1,
     textAlign: "left",
