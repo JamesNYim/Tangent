@@ -6,6 +6,8 @@ from app.routes.messages import router as messages_router
 from app.api.auth import router as auth_router
 from app.routes.users import router as users_router
 
+import app.models
+
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Tangent API")
