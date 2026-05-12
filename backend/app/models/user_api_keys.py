@@ -2,7 +2,7 @@ from sqlalchemy import (
     Column,
     Integer,
     String,
-    Datetime,
+    DateTime,
     ForeignKey,
     func,
     UniqueConstraint,
@@ -26,7 +26,7 @@ class UserAPIKeys(Base):
 
     auth_tag = Column(String, nullable=False)
 
-    created_at = Column(Datetime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False)
 
     user = relationship("User", back_populates="api_keys")
 
