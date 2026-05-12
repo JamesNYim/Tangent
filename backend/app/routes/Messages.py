@@ -99,6 +99,7 @@ def send_message(conversation_id: int, payload: MessageCreate, db: Session = Dep
 
     try:
         ai_text = generate_ai_msg(
+            db=db,
             context=build_chat_msgs(context_messages),
             user=user
         )

@@ -5,7 +5,7 @@ from sqlalchemy import func
 from app.db.session import get_db
 
 from app.models.user_api_keys import UserAPIKeys
-from app.schema.user_api_keys import APIKeySaveRequest, APIKeyDeleteRequest
+from app.schemas.user_api_keys import APIKeySaveRequest, APIKeyDeleteRequest
 from app.api.encryption import encrypt_api_key, decrypt_api_key
 
 from app.api.auth import get_current_user
