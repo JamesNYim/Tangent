@@ -157,11 +157,7 @@ const styles = {
     marginBottom: "8px",
   },
 
-  name: {
-    fontSize: "14px",
-    fontWeight: "bold",
-  },
-
+  
   email: {
     fontSize: "12px",
     opacity: 0.7,
@@ -319,6 +315,6 @@ const styles = {
     flex: 1,
     textAlign: "left",
     fontSize: "14px",
-  }
-
+    fontWeight: "bold",
+  },
 };
