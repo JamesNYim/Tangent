@@ -165,6 +165,29 @@ function getSubtreeHeight(node, childrenMap) {
   return Math.max(BRANCH_Y_STEP, total);
 }
 
+function getSubtreeWidth(node, childrenMap) {
+    const children = getChildren(childrenMap, node.id);
+
+    if (children.length === 0) {
+        return BRANCH_X_STEP;
+    }
+
+    let maxWidth = BRANCH_X_STEP;
+    
+    for (const child of children) {
+        const isExplicitBranch = child.branch_from_message_id === node.id;
+
+        const childWidth = 
+            isExplicitBranch
+            ? BRANCH_X_STEP + getSubtreeWidth(child, childrenMap)
+            : getSubtreeWidth(child, childrenMap);
+
+        maxWidth = Math.max(maxWidth, childWidth);
+    }
+
+    return maxWidth;
+}
+
 function BranchSubtree({
   node,
   childrenMap,
@@ -415,8 +438,11 @@ export default function TreeSidebar({
             )}
 
             {branchChildren.map((child, branchIndex) => {
-              const branchX =
-                FIRST_BRANCH_OFFSET + branchIndex * BRANCH_X_STEP;
+              let priorWidth = 0;
+              for (const sibling of branchChildren.slice(0, branchIndex)) {
+                  priorWidth += getSubtreeWidth(sibling, childrenMap);
+              }
+              const branchX = FIRST_BRANCH_OFFSET + priorWidth;
               const branchY = 0;
 
               const parentCenterX = NODE_SIZE / 2;
