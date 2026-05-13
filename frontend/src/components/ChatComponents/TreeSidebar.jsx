@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { getMessageLabel } from "../../api/messageHelpers";
 
 const NODE_SIZE = 12;
 const ROW_HEIGHT = 28;
@@ -227,7 +228,7 @@ function BranchSubtree({
           ...(isLeftFocused ? styles.leftFocusedNode : {}),
           ...(isRightFocused ? styles.rightFocusedNode : {}),
         }}
-        title={`msg ${node.id}`}
+        title={`${getMessageLabel(node)}`}
       />
 
       {children.map((child, index) => {
@@ -425,7 +426,7 @@ export default function TreeSidebar({
                 ...(isLeftFocused ? styles.leftFocusedNode : {}),
                 ...(isRightFocused ? styles.rightFocusedNode : {}),
               }}
-              title={`msg ${msg.id}`}
+              title={`${getMessageLabel(msg)}`}
             />
 
             {hasNext && (
