@@ -377,7 +377,7 @@ export default function TreeSidebar({
   }
 
   return (
-    <aside style={sidebarStyle}>
+    <aside style={sidebarStyle} className="hide-scrollbar">
       <div style={styles.title}>Tree</div>
 
       {mainPath.map((msg, index) => {
