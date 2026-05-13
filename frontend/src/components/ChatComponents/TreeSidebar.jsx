@@ -114,18 +114,8 @@ const styles = {
   },
 };
 
-function getFirstChildOfBranch(messages, clickedNodeId, branchPointId) {
-  const fullPath = getPathToRoot(messages, clickedNodeId);
-
-  const branchPointIndex = fullPath.findIndex(
-    (msg) => msg.id === branchPointId
-  );
-
-  if (branchPointIndex === -1) return clickedNodeId;
-
-  const firstChild = fullPath[branchPointIndex + 1];
-
-  return firstChild?.id ?? clickedNodeId;
+function getChildren(childrenMap, messageID) {
+  return childrenMap.get(messageID) || [];
 }
 
 function findLatestVisibleLeaf(startId, childrenMap) {
@@ -146,10 +136,6 @@ function findLatestVisibleLeaf(startId, childrenMap) {
   }
 }
 
-function getChildren(childrenMap, messageID) {
-  return childrenMap.get(messageID) || [];
-}
-
 function getSubtreeHeight(node, childrenMap) {
   const children = getChildren(childrenMap, node.id);
 
@@ -157,36 +143,54 @@ function getSubtreeHeight(node, childrenMap) {
     return BRANCH_Y_STEP;
   }
 
-  let total = 0;
+  let totalHeight = BRANCH_Y_STEP;
 
   for (const child of children) {
-    total += getSubtreeHeight(child, childrenMap);
+    const isExplicitBranch = child.branch_from_message_id === node.id;
+
+    if (isExplicitBranch) {
+      totalHeight = Math.max(
+        totalHeight,
+        ROW_HEIGHT + getSubtreeHeight(child, childrenMap)
+      );
+    } else {
+      totalHeight += getSubtreeHeight(child, childrenMap);
+    }
   }
 
-  return Math.max(BRANCH_Y_STEP, total);
+  return totalHeight;
 }
 
 function getSubtreeWidth(node, childrenMap) {
-    const children = getChildren(childrenMap, node.id);
+  const children = getChildren(childrenMap, node.id);
 
-    if (children.length === 0) {
-        return BRANCH_X_STEP;
-    }
+  if (children.length === 0) {
+    return BRANCH_X_STEP;
+  }
 
-    let maxWidth = BRANCH_X_STEP;
-    
-    for (const child of children) {
-        const isExplicitBranch = child.branch_from_message_id === node.id;
+  let maxWidth = BRANCH_X_STEP;
 
-        const childWidth = 
-            isExplicitBranch
-            ? BRANCH_X_STEP + getSubtreeWidth(child, childrenMap)
-            : getSubtreeWidth(child, childrenMap);
+  for (const child of children) {
+    const isExplicitBranch = child.branch_from_message_id === node.id;
 
-        maxWidth = Math.max(maxWidth, childWidth);
-    }
+    const childWidth = isExplicitBranch
+      ? BRANCH_X_STEP + getSubtreeWidth(child, childrenMap)
+      : getSubtreeWidth(child, childrenMap);
 
-    return maxWidth;
+    maxWidth = Math.max(maxWidth, childWidth);
+  }
+
+  return maxWidth;
+}
+
+function getBranchX(branchChildren, branchIndex, childrenMap) {
+  let priorWidth = 0;
+
+  for (const sibling of branchChildren.slice(0, branchIndex)) {
+    priorWidth += getSubtreeWidth(sibling, childrenMap);
+  }
+
+  return FIRST_BRANCH_OFFSET + priorWidth;
 }
 
 function BranchSubtree({
@@ -211,9 +215,6 @@ function BranchSubtree({
       <button
         type="button"
         onClick={() => {
-          const branchPointId =
-            node.branch_from_message_id ?? node.parent_msg_id;
-
           onBranchToggle?.(
             containingBranchPointId,
             rootBranchChildId,
@@ -275,7 +276,7 @@ function BranchSubtree({
               />
             )}
 
-          <BranchSubtree
+            <BranchSubtree
               node={child}
               childrenMap={childrenMap}
               onBranchToggle={onBranchToggle}
@@ -289,19 +290,13 @@ function BranchSubtree({
                   : sourceLeafId
               }
               sourceBranchPointId={
-                isExplicitBranch
-                  ? containingBranchPointId
-                  : sourceBranchPointId
+                isExplicitBranch ? containingBranchPointId : sourceBranchPointId
               }
               containingBranchPointId={
-                isExplicitBranch
-                  ? node.id
-                  : containingBranchPointId
+                isExplicitBranch ? node.id : containingBranchPointId
               }
               rootBranchChildId={
-                isExplicitBranch
-                  ? child.id
-                  : rootBranchChildId
+                isExplicitBranch ? child.id : rootBranchChildId
               }
             />
           </React.Fragment>
@@ -376,7 +371,6 @@ export default function TreeSidebar({
       <aside style={sidebarStyle}>
         <div style={styles.title}>Tree</div>
         <div style={styles.empty}>No leaves yet...</div>
-
         <div style={styles.resizeHandle} onMouseDown={handleResizeStart} />
       </aside>
     );
@@ -407,7 +401,7 @@ export default function TreeSidebar({
 
         const rowHeight =
           branchChildren.length > 0
-            ? ROW_HEIGHT + deepestBranchHeight + BRANCH_Y_STEP
+            ? ROW_HEIGHT * 2 + deepestBranchHeight
             : ROW_HEIGHT;
 
         return (
@@ -438,26 +432,50 @@ export default function TreeSidebar({
               />
             )}
 
-            {branchChildren.map((child, branchIndex) => {
-              let priorWidth = 0;
-              for (const sibling of branchChildren.slice(0, branchIndex)) {
-                  priorWidth += getSubtreeWidth(sibling, childrenMap);
-              }
-              const branchX = FIRST_BRANCH_OFFSET + priorWidth;
-              const branchY = 0;
+            {branchChildren.length > 0 && (() => {
+              const lastBranchIndex = branchChildren.length - 1;
+              const lastBranchX = getBranchX(
+                branchChildren,
+                lastBranchIndex,
+                childrenMap
+              );
 
               const parentCenterX = NODE_SIZE / 2;
-              const parentCenterY = NODE_SIZE / 2;
+              const lastBranchCenterX = lastBranchX + NODE_SIZE / 2;
+
+              return (
+                <div
+                  style={{
+                    ...styles.branchHorizontal,
+                    left: `${parentCenterX}px`,
+                    top: `${NODE_SIZE / 2}px`,
+                    width: `${lastBranchCenterX - parentCenterX}px`,
+                  }}
+                />
+              );
+            })()}
+
+            {branchChildren.map((child, branchIndex) => {
+              const branchX = getBranchX(
+                branchChildren,
+                branchIndex,
+                childrenMap
+              );
+
+              const branchY = ROW_HEIGHT;
+
+              const railCenterY = NODE_SIZE / 2;
               const childCenterX = branchX + NODE_SIZE / 2;
+              const childCenterY = branchY + NODE_SIZE / 2;
 
               return (
                 <React.Fragment key={child.id}>
                   <div
                     style={{
-                      ...styles.branchHorizontal,
-                      left: `${parentCenterX}px`,
-                      top: `${parentCenterY}px`,
-                      width: `${childCenterX - parentCenterX}px`,
+                      ...styles.branchVertical,
+                      left: `${childCenterX}px`,
+                      top: `${railCenterY}px`,
+                      height: `${childCenterY - railCenterY}px`,
                     }}
                   />
 
@@ -469,10 +487,8 @@ export default function TreeSidebar({
                     y={branchY}
                     leftFocusedMessageId={leftFocusedMessageId}
                     rightFocusedMessageId={rightFocusedMessageId}
-                  
                     sourceLeafId={activeLastLeafId}
                     sourceBranchPointId={null}
-                  
                     containingBranchPointId={msg.id}
                     rootBranchChildId={child.id}
                   />
