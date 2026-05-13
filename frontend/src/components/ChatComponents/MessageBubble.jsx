@@ -193,7 +193,6 @@ export default function MessageBubble({
       }}
     >
       <div
-        onClick={handleBubbleClick}
         style={{
           ...styles.bubble,
           ...(isUser ? styles.userBubble : styles.assistantBubble),
