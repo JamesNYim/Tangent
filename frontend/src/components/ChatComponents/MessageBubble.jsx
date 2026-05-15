@@ -1,5 +1,6 @@
 import { useState } from "react";
 import MarkdownRenderer from "./MarkdownRenderer";
+import MessageMenuButton from "./MessageMenuButton";
 
 const styles = {
   row: {
@@ -214,15 +215,12 @@ export default function MessageBubble({
           <MarkdownRenderer content={msg.content || ""} />
         </div>
 
-        {isBranchPoint && (
-          <button
-            type="button"
-            onClick={handleToggleBranch}
-            style={styles.branchButton}
-          >
-            {isBranchOpen ? "▾" : "▸"}
-          </button>
-        )}
+        <MessageMenuButton
+          msg={msg}
+          tangents={explicitBranchChildren}
+          isBranchOpen={isBranchOpen}
+          onBranchToggle={onBranchToggle}
+        />
 
         {popupPosition && (
           <div
