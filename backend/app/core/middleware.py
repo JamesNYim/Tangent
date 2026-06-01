@@ -3,7 +3,8 @@ from fastapi import Request
 
 def add_middleware(app):
     origins = [
-        "http://localhost:5173"
+        "http://localhost:5173",
+         "https://tangent-sand.vercel.app"
     ]
     app.add_middleware(
         CORSMiddleware,
