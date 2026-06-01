@@ -4,7 +4,8 @@ from fastapi import Request
 def add_middleware(app):
     origins = [
         "http://localhost:5173",
-         "https://tangent-sand.vercel.app"
+         "https://tangent-sand.vercel.app",
+         "https://tangent-hj2brma7o-jamesnyims-projects.vercel.app"
     ]
     app.add_middleware(
         CORSMiddleware,
