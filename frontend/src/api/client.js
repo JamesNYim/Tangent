@@ -1,5 +1,8 @@
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const API_BASE = import.meta.env.VITE_API_BASE_URL;
 
+if (!API_BASE) {
+    throw new Error("MISSING VITE_API_BASE_URL");
+}
 
 // ADR-001: Generic API wrapper (see docs/architecture/001-api-client.md)
 export async function api(path, options = {}) {
