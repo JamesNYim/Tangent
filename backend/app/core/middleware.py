@@ -16,3 +16,4 @@ def add_middleware(app):
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    print("CORS ORIGINS:", origins)
