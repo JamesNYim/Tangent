@@ -19,8 +19,8 @@ app.add_middleware(
         "http://localhost:5173", 
         "https://tangent-sand.vercel.app",
         "https://tangent-hj2brma7o-jamesnyims-projects.vercel.app",
-        "https://tangent.xyz",
-        "https://www.tangent.xyz"
+        "https://tangentai.xyz",
+        "https://www.tangentai.xyz"
     ],
     allow_credentials=True,
     allow_methods=["*"],
