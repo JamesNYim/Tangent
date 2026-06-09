@@ -1,6 +1,6 @@
-import {useEffect, useRef} from 'react';
+import React, { useEffect, useRef } from "react";
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   dropdown: {
     position: "absolute",
     right: "10px",
@@ -24,20 +24,25 @@ const styles = {
   },
 };
 
-export default function DropdownMenu({ convoId, convoTitle, onRename, onDelete, onClose }) {
-  const dropdownRef = useRef(null);
-  
+interface Props {
+  convoId: number;
+  convoTitle: string;
+  onRename: (id: number, title: string) => void;
+  onDelete: (id: number) => void;
+  onClose: () => void;
+}
+
+export default function DropdownMenu({ convoId, convoTitle, onRename, onDelete, onClose }: Props) {
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
-    function handleClickOutside(e) {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+    function handleClickOutside(e: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
         onClose();
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside); 
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [onClose]);
 
   return (
@@ -45,21 +50,14 @@ export default function DropdownMenu({ convoId, convoTitle, onRename, onDelete, 
       <button
         type="button"
         style={styles.dropdownButton}
-        onClick={() => {
-          onRename(convoId, convoTitle);
-          onClose?.();
-        }}
+        onClick={() => { onRename(convoId, convoTitle); onClose(); }}
       >
         Rename
       </button>
-
       <button
         type="button"
         style={styles.dropdownButton}
-        onClick={() => {
-          onDelete(convoId);
-          onClose?.();
-        }}
+        onClick={() => { onDelete(convoId); onClose(); }}
       >
         Delete
       </button>

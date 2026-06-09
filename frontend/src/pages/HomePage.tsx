@@ -1,7 +1,8 @@
+import React from "react";
 import { useNavigate } from "react-router-dom";
-import TreeLogo from "../components/TreeLogo"; // keep your existing import
+import TreeLogo from "../components/TreeLogo";
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   page: {
     position: "fixed",
     inset: 0,

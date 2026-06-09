@@ -1,13 +1,13 @@
 import { useState } from "react";
 import { getMessageLabel } from "../../api/messageHelpers";
+import type { Message } from "../../types";
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   wrapper: {
     position: "absolute",
     top: "8px",
     right: "8px",
   },
-
   button: {
     fontSize: "11px",
     padding: "2px 7px",
@@ -17,7 +17,6 @@ const styles = {
     cursor: "pointer",
     opacity: 0.8,
   },
-
   menu: {
     position: "absolute",
     top: "28px",
@@ -30,13 +29,11 @@ const styles = {
     padding: "10px",
     boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
   },
-
   sectionTitle: {
     fontSize: "11px",
     opacity: 0.7,
     marginBottom: "6px",
   },
-
   tangentButton: {
     width: "100%",
     textAlign: "left",
@@ -48,7 +45,6 @@ const styles = {
     cursor: "pointer",
     marginBottom: "6px",
   },
-
   notes: {
     marginTop: "10px",
     fontSize: "12px",
@@ -57,15 +53,17 @@ const styles = {
   },
 };
 
-export default function MessageMenuButton({
-  msg,
-  tangents = [],
-  isBranchOpen,
-  onBranchToggle,
-}) {
+interface Props {
+  msg: Message;
+  tangents?: Message[];
+  isBranchOpen: boolean;
+  onBranchToggle?: (messageId: number, childId: number) => void;
+}
+
+export default function MessageMenuButton({ msg, tangents = [], isBranchOpen, onBranchToggle }: Props) {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  function handleNavigateToTangent(tangent) {
+  function handleNavigateToTangent(tangent: Message) {
     onBranchToggle?.(msg.id, tangent.id);
     setMenuOpen(false);
   }
@@ -77,27 +75,27 @@ export default function MessageMenuButton({
         onClick={() => setMenuOpen((prev) => !prev)}
         style={styles.button}
       >
-      {"⋯"}
+        {"⋯"}
       </button>
 
       {menuOpen && (
         <div style={styles.menu}>
           <div style={styles.sectionTitle}>Tangents</div>
 
-          {tangents.map((tangent, index) => (
+          {tangents.map((tangent) => (
             <button
               key={tangent.id}
               type="button"
               onClick={() => handleNavigateToTangent(tangent)}
               style={styles.tangentButton}
             >
-              {`${getMessageLabel(tangent)}`}
+              {getMessageLabel(tangent)}
             </button>
           ))}
 
           <div style={styles.notes}>
             <div style={styles.sectionTitle}>Notes</div>
-            {msg.branch_note || "Notes coming soon..."}
+            {"Notes coming soon..."}
           </div>
         </div>
       )}

@@ -1,19 +1,21 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { login } from "../api/auth";
-import { useAuth } from "../auth/AuthContext";
-import RegisterButton from "../components/RegisterButton";
+import { register } from "../api/auth";
+import LoginButton from "../components/LoginButton";
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   page: {
-    flex: 1,
+    position: "fixed",
+    inset: 0,
+    background: "#2f2220",
+    color: "#f5f5dc",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    minHeight: 0,
-    minWidth: 0,
-   },
-   logincard: {
+    padding: "24px",
+    boxSizing: "border-box",
+  },
+  card: {
     width: "100%",
     maxWidth: "420px",
     background: "#3e4d44",
@@ -21,27 +23,21 @@ const styles = {
     borderRadius: "18px",
     padding: "28px",
     boxShadow: "0 12px 30px rgba(0, 0, 0, 0.35)",
-    alignItems: "center",
-    justifyContent: "center",
   },
-
   title: {
     margin: "0 0 20px",
     fontSize: "28px",
     color: "#f5f5dc",
   },
-
   form: {
     display: "flex",
     flexDirection: "column",
     gap: "12px",
   },
-
   label: {
     fontSize: "13px",
     opacity: 0.85,
   },
-
   input: {
     padding: "10px 14px",
     background: "#33352c",
@@ -51,13 +47,11 @@ const styles = {
     outline: "none",
     fontSize: "15px",
   },
-
   error: {
     color: "#ff8a8a",
     fontSize: "14px",
     margin: "4px 0",
   },
-
   button: {
     marginTop: "8px",
     padding: "10px 14px",
@@ -69,45 +63,44 @@ const styles = {
     fontWeight: "bold",
     fontSize: "15px",
   },
-
-  registerWrap: {
+  switchWrap: {
     marginTop: "16px",
   },
 };
 
-export default function LoginPage() {
+export default function RegisterPage() {
   const nav = useNavigate();
-  const { setSessionFromToken } = useAuth();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("");
   const [err, setErr] = useState("");
 
-  async function onSubmit(e) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setErr("");
 
     try {
-      const data = await login(username, password);
-      const token = data.access_token;
-
-      if (!token) {
-        throw new Error("No token returned from login");
-      }
-
-      await setSessionFromToken(token);
-      nav("/chat");
+      await register(email, username, password);
+      nav("/login");
     } catch (error) {
-      setErr(error.message);
+      setErr(error instanceof Error ? error.message : "Registration failed");
     }
   }
 
   return (
     <div style={styles.page}>
-      <div style={styles.logincard}>
-        <h2 style={styles.title}>Login</h2>
+      <div style={styles.card}>
+        <h2 style={styles.title}>Register</h2>
 
         <form style={styles.form} onSubmit={onSubmit}>
+          <label style={styles.label}>Email</label>
+          <input
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            style={styles.input}
+          />
+
           <label style={styles.label}>Username</label>
           <input
             value={username}
@@ -126,12 +119,12 @@ export default function LoginPage() {
           {err && <p style={styles.error}>{err}</p>}
 
           <button style={styles.button} type="submit">
-            Login
+            Create account
           </button>
         </form>
 
-        <div style={styles.registerWrap}>
-          <RegisterButton />
+        <div style={styles.switchWrap}>
+          <LoginButton />
         </div>
       </div>
     </div>

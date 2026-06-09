@@ -1,7 +1,8 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import DropdownMenu from "./DropdownMenu";
+import type { Conversation } from "../../types";
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   item: {
     position: "relative",
     display: "flex",
@@ -14,10 +15,7 @@ const styles = {
     cursor: "pointer",
     outline: "none",
   },
-  activeItem: {
-    border: "1px solid #a9b192",
-    fontWeight: "bold",
-  },
+  activeItem: { border: "1px solid #a9b192", fontWeight: "bold" },
   itemButton: {
     flex: 1,
     textAlign: "left",
@@ -37,13 +35,15 @@ const styles = {
   },
 };
 
-export default function ConversationItem({
-  convo,
-  isActive,
-  onSelect,
-  onRename,
-  onDelete,
-}) {
+interface Props {
+  convo: Conversation;
+  isActive: boolean;
+  onSelect: (id: number) => void;
+  onRename: (id: number, title: string) => void;
+  onDelete: (id: number) => void;
+}
+
+export default function ConversationItem({ convo, isActive, onSelect, onRename, onDelete }: Props) {
   const [isHovered, setIsHovered] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
 
@@ -51,16 +51,9 @@ export default function ConversationItem({
     <div
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      style={{
-        ...styles.item,
-        ...(isActive ? styles.activeItem : {}),
-      }}
+      style={{ ...styles.item, ...(isActive ? styles.activeItem : {}) }}
     >
-      <button
-        type="button"
-        onClick={() => onSelect(convo.id)}
-        style={styles.itemButton}
-      >
+      <button type="button" onClick={() => onSelect(convo.id)} style={styles.itemButton}>
         {convo.title}
       </button>
 
@@ -68,10 +61,7 @@ export default function ConversationItem({
         <button
           type="button"
           style={styles.conversationMenuButton}
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowMenu((prev) => !prev);
-          }}
+          onClick={(e) => { e.stopPropagation(); setShowMenu((prev) => !prev); }}
         >
           ⋯
         </button>

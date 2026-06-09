@@ -1,11 +1,13 @@
 import { useRef } from "react";
+import type { FormEvent } from "react";
+import React from "react";
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   form: {
     display: "flex",
     gap: "8px",
     padding: "16px",
-    alignItems: "flex-end", // stops button from stretching
+    alignItems: "flex-end",
   },
   input: {
     flex: 1,
@@ -20,26 +22,28 @@ const styles = {
     resize: "none",
     overflowY: "auto",
     boxSizing: "border-box",
-    fontFamily: "inherit",   // 👈 key fix
-    fontSize: "14px",        // match your UI
+    fontFamily: "inherit",
+    fontSize: "14px",
     color: "inherit",
   },
   button: {
-    height: "40px", // fixed button height
+    height: "40px",
     alignSelf: "flex-end",
   },
 };
 
-export default function MessageInput({
-  input,
-  setInput,
-  onSendMessage,
-  disabled,
-  sending,
-}) {
-  const textareaRef = useRef(null);
+interface Props {
+  input: string;
+  setInput: (value: string) => void;
+  onSendMessage: (e: FormEvent) => void;
+  disabled: boolean;
+  sending: boolean;
+}
 
-  function resizeTextarea(el) {
+export default function MessageInput({ input, setInput, onSendMessage, disabled, sending }: Props) {
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  function resizeTextarea(el: HTMLTextAreaElement) {
     el.style.height = "40px";
     el.style.height = Math.min(el.scrollHeight, 150) + "px";
   }
@@ -49,20 +53,20 @@ export default function MessageInput({
     textareaRef.current.style.height = "40px";
   }
 
-  function handleKeyDown(e) {
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      onSendMessage(e);
+      onSendMessage(e as unknown as FormEvent);
       resetTextarea();
     }
   }
 
-  function handleSubmit(e) {
+  function handleSubmit(e: FormEvent) {
     onSendMessage(e);
     resetTextarea();
   }
 
-  function handleChange(e) {
+  function handleChange(e: React.ChangeEvent<HTMLTextAreaElement>) {
     setInput(e.target.value);
     resizeTextarea(e.target);
   }
@@ -79,7 +83,6 @@ export default function MessageInput({
         disabled={disabled}
         style={styles.input}
       />
-
       <button type="submit" disabled={disabled} style={styles.button}>
         {sending ? "Sending..." : "Send"}
       </button>

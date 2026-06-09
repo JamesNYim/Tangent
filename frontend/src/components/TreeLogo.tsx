@@ -18,7 +18,7 @@ const NESTED_BRANCH_CHANCE = 0.45;
 
 const TREE_PADDING = 40;
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   treeshell: {
     width: `${SHELL_WIDTH}px`,
     height: "100%",
@@ -69,21 +69,30 @@ const styles = {
   },
 };
 
-function randomFrom(seed) {
-  let value = seed;
+interface FakeMsg {
+  id: number;
+  parent_msg_id: number | null;
+  branch_from_message_id: number | null;
+  type: string;
+}
 
+interface TreeNode { id: number; x: number; y: number; type: string; }
+interface TreeLine { id: string; x1: number; y1: number; x2: number; y2: number; isBranch: boolean; }
+
+function randomFrom(seed: number) {
+  let value = seed;
   return function random() {
     value = (value * 9301 + 49297) % 233280;
     return value / 233280;
   };
 }
 
-function makeFakeMessages(seed) {
+function makeFakeMessages(seed: number): FakeMsg[] {
   const random = randomFrom(seed);
-  const messages = [];
+  const messages: FakeMsg[] = [];
   let id = 1;
 
-  function addBranchChain(parent, nestingLevel = 0) {
+  function addBranchChain(parent: FakeMsg, nestingLevel = 0) {
     const branchRoot = {
       id: id++,
       parent_msg_id: parent.id,
@@ -93,7 +102,7 @@ function makeFakeMessages(seed) {
 
     messages.push(branchRoot);
 
-    let branchParent = branchRoot;
+    let branchParent: FakeMsg = branchRoot;
     const depth = 1 + Math.floor(random() * MAX_BRANCH_DEPTH);
 
     for (let d = 0; d < depth; d++) {
@@ -126,10 +135,10 @@ function makeFakeMessages(seed) {
 
   messages.push(root);
 
-  let currentMain = root;
+  let currentMain: FakeMsg = root;
 
   for (let i = 1; i < MAIN_COUNT; i++) {
-    const mainMsg = {
+    const mainMsg: FakeMsg = {
       id: id++,
       parent_msg_id: currentMain.id,
       branch_from_message_id: null,
@@ -151,31 +160,25 @@ function makeFakeMessages(seed) {
   return messages;
 }
 
-function buildChildrenMap(messages) {
-  const map = new Map();
-
+function buildChildrenMap(messages: FakeMsg[]): Map<number | null, FakeMsg[]> {
+  const map = new Map<number | null, FakeMsg[]>();
   for (const msg of messages) {
     const parentId = msg.parent_msg_id;
-
-    if (!map.has(parentId)) {
-      map.set(parentId, []);
-    }
-
-    map.get(parentId).push(msg);
+    if (!map.has(parentId)) map.set(parentId, []);
+    map.get(parentId)!.push(msg);
   }
-
   return map;
 }
 
-function getChildren(childrenMap, messageId) {
+function getChildren(childrenMap: Map<number | null, FakeMsg[]>, messageId: number | null): FakeMsg[] {
   return childrenMap.get(messageId) || [];
 }
 
-function isExplicitBranch(parent, child) {
+function isExplicitBranch(parent: FakeMsg, child: FakeMsg): boolean {
   return child.branch_from_message_id === parent.id;
 }
 
-function getSubtreeHeight(node, childrenMap) {
+function getSubtreeHeight(node: FakeMsg, childrenMap: Map<number | null, FakeMsg[]>): number {
   const children = getChildren(childrenMap, node.id);
 
   if (children.length === 0) {
@@ -208,12 +211,12 @@ function getSubtreeHeight(node, childrenMap) {
   );
 }
 
-function layoutTreeFromMessages(messages) {
+function layoutTreeFromMessages(messages: FakeMsg[]): { nodes: TreeNode[]; lines: TreeLine[] } {
   const childrenMap = buildChildrenMap(messages);
-  const nodes = [];
-  const lines = [];
+  const nodes: TreeNode[] = [];
+  const lines: TreeLine[] = [];
 
-  function addLine(parentX, parentY, childX, childY, isBranch) {
+  function addLine(parentX: number, parentY: number, childX: number, childY: number, isBranch: boolean) {
     const parentCenterX = parentX + NODE_SIZE / 2;
     const parentCenterY = parentY + NODE_SIZE / 2;
     const childCenterX = childX + NODE_SIZE / 2;
@@ -229,7 +232,7 @@ function layoutTreeFromMessages(messages) {
     });
   }
 
-  function layoutNode(node, x, y) {
+  function layoutNode(node: FakeMsg, x: number, y: number) {
     nodes.push({
       id: node.id,
       x,
@@ -282,9 +285,9 @@ function layoutTreeFromMessages(messages) {
   return { nodes, lines };
 }
 
-function centerTree(tree, shellWidth, shellHeight) {
-  const allXs = [];
-  const allYs = [];
+function centerTree(tree: { nodes: TreeNode[]; lines: TreeLine[] }, shellWidth: number, shellHeight: number) {
+  const allXs: number[] = [];
+  const allYs: number[] = [];
 
   for (const node of tree.nodes) {
     allXs.push(node.x, node.x + NODE_SIZE);

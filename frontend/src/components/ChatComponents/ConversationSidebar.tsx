@@ -1,6 +1,8 @@
+import React from "react";
 import ConversationItem from "./ConversationItem";
+import type { Conversation } from "../../types";
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   sidebar: {
     backgroundColor: "#3e4d44",
     width: "260px",
@@ -8,20 +10,21 @@ const styles = {
     padding: "16px",
     boxSizing: "border-box",
     overflowY: "auto",
-    flexShrink: 0
+    flexShrink: 0,
   },
-  header: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "16px",
-  },
-  list: {
-    display: "flex",
-    flexDirection: "column",
-    gap: "8px",
-  },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" },
+  list: { display: "flex", flexDirection: "column", gap: "8px" },
 };
+
+interface Props {
+  conversations: Conversation[];
+  selectedConversationId: number | null;
+  loadingConversations: boolean;
+  onNewChat: () => void;
+  onSelectConversation: (id: number) => void;
+  onRenameConversation: (id: number, title: string) => void;
+  onDeleteConversation: (id: number) => void;
+}
 
 export default function ConversationSidebar({
   conversations,
@@ -31,8 +34,7 @@ export default function ConversationSidebar({
   onSelectConversation,
   onRenameConversation,
   onDeleteConversation,
-}) 
-{
+}: Props) {
   return (
     <aside style={styles.sidebar}>
       <div style={styles.header}>

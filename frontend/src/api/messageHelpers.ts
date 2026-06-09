@@ -1,5 +1,6 @@
-// messages/messageHelpers.js
-export function getMessageLabel(msg) {
+import type { Message } from "../types";
+
+export function getMessageLabel(msg: Message | null | undefined): string {
   if (!msg?.content) return "Message";
 
   const clean = msg.content

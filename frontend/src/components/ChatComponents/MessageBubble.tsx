@@ -1,13 +1,10 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import MarkdownRenderer from "./MarkdownRenderer";
 import MessageMenuButton from "./MessageMenuButton";
+import type { Message } from "../../types";
 
-const styles = {
-  row: {
-    display: "flex",
-    width: "100%",
-  },
-
+const styles: Record<string, React.CSSProperties> = {
+  row: { display: "flex", width: "100%" },
   bubble: {
     maxWidth: "min(72%, 760px)",
     padding: "12px 14px",
@@ -20,15 +17,8 @@ const styles = {
     overflowWrap: "anywhere",
     minHeight: "22px",
   },
-
-  userBubble: {
-    borderBottomRightRadius: "4px",
-  },
-
-  assistantBubble: {
-    borderBottomLeftRadius: "4px",
-  },
-
+  userBubble: { borderBottomRightRadius: "4px" },
+  assistantBubble: { borderBottomLeftRadius: "4px" },
   role: {
     fontSize: "11px",
     fontWeight: "bold",
@@ -36,12 +26,7 @@ const styles = {
     opacity: 0.65,
     textTransform: "capitalize",
   },
-
-  content: {
-    userSelect: "text",
-    cursor: "text",
-  },
-
+  content: { userSelect: "text", cursor: "text" },
   popup: {
     position: "fixed",
     zIndex: 9999,
@@ -54,7 +39,6 @@ const styles = {
     padding: "8px",
     boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
   },
-
   button: {
     background: "#798262",
     color: "#f5f5d3",
@@ -65,7 +49,6 @@ const styles = {
     fontSize: "12px",
     whiteSpace: "nowrap",
   },
-
   secondaryButton: {
     background: "#4c2b12",
     color: "#f5f5d3",
@@ -76,21 +59,17 @@ const styles = {
     fontSize: "12px",
     whiteSpace: "nowrap",
   },
-
-  branchButton: {
-    position: "absolute",
-    top: "8px",
-    right: "8px",
-    fontSize: "11px",
-    padding: "2px 7px",
-    borderRadius: "999px",
-    border: "1px solid #f5f5d3",
-    background: "rgba(0,0,0,0.12)",
-    color: "#f5f5d3",
-    cursor: "pointer",
-    opacity: 0.8,
-  },
 };
+
+interface Props {
+  msg: Message;
+  onSelectMessage?: (id: number) => void;
+  onOpenBranch?: (msg: Message, selectedText: string | null, childId?: number | null) => void;
+  onBranchToggle?: (messageId: number, childId: number) => void;
+  branchChildren?: Message[];
+  isBranchOpen?: boolean;
+  registerMessageRef?: (id: number, el: HTMLDivElement | null) => void;
+}
 
 export default function MessageBubble({
   msg,
@@ -100,17 +79,16 @@ export default function MessageBubble({
   branchChildren = [],
   isBranchOpen = false,
   registerMessageRef,
-}) {
+}: Props) {
   const isUser = msg.role === "user";
-
   const [selectedText, setSelectedText] = useState("");
-  const [popupPosition, setPopupPosition] = useState(null);
+  const [popupPosition, setPopupPosition] = useState<{ x: number; y: number } | null>(null);
 
   function captureSelection() {
     const selection = window.getSelection();
     const text = selection?.toString()?.trim() || "";
 
-    if (!text || selection.rangeCount === 0) {
+    if (!text || !selection || selection.rangeCount === 0) {
       setSelectedText("");
       setPopupPosition(null);
       return;
@@ -120,78 +98,41 @@ export default function MessageBubble({
     const rect = range.getBoundingClientRect();
 
     setSelectedText(text);
-    setPopupPosition({
-      x: rect.left + rect.width / 2,
-      y: rect.top - 12,
-    });
+    setPopupPosition({ x: rect.left + rect.width / 2, y: rect.top - 12 });
   }
 
-  function handleBubbleClick() {
-    const selection = window.getSelection()?.toString()?.trim() || "";
-    if (selection) return;
-
-    onSelectMessage?.(msg.id);
-
-    const rect = document
-      .querySelector(`[data-message-id="${msg.id}"]`)
-      ?.getBoundingClientRect();
-
-    setSelectedText("");
-    setPopupPosition({
-      x: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
-      y: rect ? rect.top - 12 : window.innerHeight / 2,
-    });
-  }
-
-  function clearSelection(e) {
+  function clearSelection(e: React.MouseEvent) {
     e.stopPropagation();
     setSelectedText("");
     setPopupPosition(null);
     window.getSelection()?.removeAllRanges();
   }
 
-  function handleBranchWholeMessage(e) {
+  function handleBranchWholeMessage(e: React.MouseEvent) {
     e.stopPropagation();
     onOpenBranch?.(msg, null);
     setPopupPosition(null);
     setSelectedText("");
   }
 
-  function handleBranchSelection(e) {
+  function handleBranchSelection(e: React.MouseEvent) {
     e.stopPropagation();
     if (!selectedText.trim()) return;
-
     onOpenBranch?.(msg, selectedText);
     setPopupPosition(null);
     setSelectedText("");
   }
 
-  function handleToggleBranch(e) {
-    e.stopPropagation();
-
-    const firstBranchChild = branchChildren.find(
-      (child) => child.branch_from_message_id === msg.id
-    );
-
-    if (!firstBranchChild) return;
-
-    onBranchToggle?.(msg.id, firstBranchChild.id);
-  }
-
   const explicitBranchChildren = branchChildren.filter(
     (child) => child.branch_from_message_id === msg.id
   );
-
   const isBranchPoint = explicitBranchChildren.length > 0;
 
   return (
     <div
       ref={(el) => registerMessageRef?.(msg.id, el)}
       data-message-id={msg.id}
-      style={{
-        ...styles.row,
-        justifyContent: isUser ? "flex-end" : "flex-start",
-      }}
+      style={{ ...styles.row, justifyContent: isUser ? "flex-end" : "flex-start" }}
     >
       <div
         style={{
@@ -206,7 +147,6 @@ export default function MessageBubble({
           style={styles.content}
           onMouseUp={(e) => {
             captureSelection();
-
             const selection = window.getSelection()?.toString()?.trim() || "";
             if (selection) e.stopPropagation();
           }}
@@ -232,29 +172,17 @@ export default function MessageBubble({
             }}
             onClick={(e) => e.stopPropagation()}
           >
-            <button
-              type="button"
-              onClick={handleBranchWholeMessage}
-              style={styles.button}
-            >
+            <button type="button" onClick={handleBranchWholeMessage} style={styles.button}>
               Branch message
             </button>
 
             {selectedText && (
-              <button
-                type="button"
-                onClick={handleBranchSelection}
-                style={styles.button}
-              >
+              <button type="button" onClick={handleBranchSelection} style={styles.button}>
                 Branch selection
               </button>
             )}
 
-            <button
-              type="button"
-              onClick={clearSelection}
-              style={styles.secondaryButton}
-            >
+            <button type="button" onClick={clearSelection} style={styles.secondaryButton}>
               ✕
             </button>
           </div>

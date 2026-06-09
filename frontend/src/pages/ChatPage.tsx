@@ -1,13 +1,9 @@
-import { useMemo, useRef, useState, useEffect, useCallback } from "react";
-import ConversationSidebar from "../components/ChatComponents/ConversationSidebar";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import ChatWindow from "../components/ChatComponents/ChatWindow";
 import TreeSidebar from "../components/ChatComponents/TreeSidebar";
 import Breadcrumb from "../components/ChatComponents/Breadcrumb";
-import AccountWidget from "../components/ProfileComponents/AccountWidget";
 import Sidebar from "../components/Sidebar";
-
-import { api }  from "../api/client"; 
-
+import { api } from "../api/client";
 import {
   createConversation,
   getConversations,
@@ -17,14 +13,15 @@ import {
   getMessages,
   sendMessage,
 } from "../api/chat";
+import type { Message, Conversation, BranchPanel, SendMessageResponse } from "../types";
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   page: {
     display: "flex",
     height: "100vh",
     width: "100%",
     background: "#3e4d44",
-    color: "#f5f5d3"
+    color: "#f5f5d3",
   },
   chatArea: {
     flex: 1,
@@ -32,7 +29,6 @@ const styles = {
     flexDirection: "column",
     minWidth: 0,
   },
-  
   panes: {
     flex: 1,
     display: "flex",
@@ -41,73 +37,57 @@ const styles = {
     gap: 0,
     width: "100%",
   },
-  accountButton: {
-    position: "absolute", 
-    bottom: 16, 
-    left: 16,
-  },
 };
 
-function buildMessagesById(messages) {
-  const map = new Map();
+function buildMessagesById(messages: Message[]): Map<number, Message> {
+  const map = new Map<number, Message>();
   for (const msg of messages) {
     map.set(msg.id, msg);
   }
   return map;
 }
 
-function getPathToRoot(messages, leafId) {
+function getPathToRoot(messages: Message[], leafId: number | null): Message[] {
   if (!leafId) return [];
-
   const messagesById = buildMessagesById(messages);
-  const path = [];
-
-  let cursor = messagesById.get(leafId);
-
+  const path: Message[] = [];
+  let cursor: Message | undefined = messagesById.get(leafId);
   while (cursor) {
     path.push(cursor);
-    cursor = cursor.parent_msg_id
-      ? messagesById.get(cursor.parent_msg_id)
-      : null;
+    cursor = cursor.parent_msg_id ? messagesById.get(cursor.parent_msg_id) : undefined;
   }
-
   return path.reverse();
 }
 
-function getBranchPath(messages, leafId, branchPointId) {
+function getBranchPath(messages: Message[], leafId: number, branchPointId: number): Message[] {
   const fullPath = getPathToRoot(messages, leafId);
   const startIndex = fullPath.findIndex((m) => m.id === branchPointId);
   if (startIndex === -1) return [];
-  return fullPath.slice(startIndex + 1); // + 1 to not include original message
+  return fullPath.slice(startIndex + 1);
 }
 
-function buildChildrenMap(messages) {
-    const map = new Map();
-
-    for (const msg of messages) {
-        const parentId = msg.parent_msg_id;
-        if (!map.has(parentId)) {
-            map.set(parentId, []);
-        }
-        let branchChildren = map.get(parentId);
-        branchChildren.push(msg);
-    }
-
-    return map;
+function buildChildrenMap(messages: Message[]): Map<number | null, Message[]> {
+  const map = new Map<number | null, Message[]>();
+  for (const msg of messages) {
+    const parentId = msg.parent_msg_id;
+    if (!map.has(parentId)) map.set(parentId, []);
+    map.get(parentId)!.push(msg);
+  }
+  return map;
 }
 
 export default function ChatPage() {
-  const messageRefs = useRef(new Map());
-  const [conversations, setConversations] = useState([]);
-  const [selectedConversationId, setSelectedConversationId] = useState(null);
-  const [messages, setMessages] = useState([]);
-  const [mainLeafId, setMainLeafId] = useState(null);
-  const [branchPanel, setBranchPanel] = useState(null);
+  const messageRefs = useRef(new Map<number, HTMLDivElement>());
+  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [mainLeafId, setMainLeafId] = useState<number | null>(null);
+  const [branchPanel, setBranchPanel] = useState<BranchPanel | null>(null);
   const [input, setInput] = useState("");
   const [loadingConversations, setLoadingConversations] = useState(true);
   const [loadingMessages, setLoadingMessages] = useState(false);
-  const [leftFocusedMessageId, setLeftFocusedMessageId] = useState(null);
-  const [rightFocusedMessageId, setRightFocusedMessageId] = useState(null);
+  const [leftFocusedMessageId, setLeftFocusedMessageId] = useState<number | null>(null);
+  const [rightFocusedMessageId, setRightFocusedMessageId] = useState<number | null>(null);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState("");
 
@@ -120,7 +100,7 @@ export default function ChatPage() {
     loadMessages(selectedConversationId);
   }, [selectedConversationId]);
 
-  const registerMessageRef = useCallback((id, el) => {
+  const registerMessageRef = useCallback((id: number, el: HTMLDivElement | null) => {
     if (el) {
       messageRefs.current.set(id, el);
     } else {
@@ -140,13 +120,13 @@ export default function ChatPage() {
         setSelectedConversationId(conversations[0].id);
       }
     } catch (err) {
-      setError(err.message || "Failed to load conversations");
+      setError(err instanceof Error ? err.message : "Failed to load conversations");
     } finally {
       setLoadingConversations(false);
     }
   }
 
-  async function handleRenameConversation(conversationId, currentTitle) {
+  async function handleRenameConversation(conversationId: number, currentTitle: string) {
     const newTitle = window.prompt("Rename chat:", currentTitle);
   
     if (newTitle == null) {
@@ -175,11 +155,11 @@ export default function ChatPage() {
         })
       );
     } catch (err) {
-      setError(err.message || "Failed to rename conversation");
+      setError(err instanceof Error ? err.message : "Failed to rename conversation");
     }
   }
 
-  async function handleDeleteConversation(conversationId) {
+  async function handleDeleteConversation(conversationId: number) {
     try {
         const deletedConversation = await deleteConversation(conversationId);
 
@@ -192,12 +172,11 @@ export default function ChatPage() {
         }
     }
     catch (e) {
-      console.log("Failed to delete conversation", e);
-      setError(e.message || "Failed to delete conversation");
+      setError(e instanceof Error ? e.message : "Failed to delete conversation");
     }
   }
 
-  async function loadMessages(conversationId) {
+  async function loadMessages(conversationId: number) {
     setLoadingMessages(true);
     setError("");
 
@@ -211,7 +190,7 @@ export default function ChatPage() {
       setBranchPanel(null)
     }
     catch (err) {
-      setError(err.message || "Failed to load messages");
+      setError(err instanceof Error ? err.message : "Failed to load messages");
     } 
     finally {
       setLoadingMessages(false);
@@ -230,11 +209,11 @@ export default function ChatPage() {
       setMainLeafId(null);
       setBranchPanel(null);
     } catch (err) {
-      setError(err.message || "Failed to create conversation");
+      setError(err instanceof Error ? err.message : "Failed to create conversation");
     }
   }
 
-  async function handleSendMessage(e) {
+  async function handleSendMessage(e: React.FormEvent) {
     e.preventDefault();
 
     const trimmed = input.trim();
@@ -257,13 +236,13 @@ export default function ChatPage() {
         });
       });
     } catch (err) {
-      setError(err.message || "Failed to send message");
+      setError(err instanceof Error ? err.message : "Failed to send message");
     } finally {
       setSending(false);
     }
   }
 
-  async function handleSendBranchMessage(e) {
+  async function handleSendBranchMessage(e: React.FormEvent) {
     e.preventDefault();
 
     if (!branchPanel || !selectedConversationId || sending) {
@@ -286,31 +265,31 @@ export default function ChatPage() {
       const data = await api(`/conversations/${selectedConversationId}/messages`, {
         method: "POST",
         body: JSON.stringify({
-        content: combinedContent,
-        parent_msg_id: branchPanel.hasStarted ? branchPanel.branchLeafId : branchPanel.branchPointId,
-        branch_from_message_id: branchPanel.branchPointId,
-        branch_from_text: branchPanel.branchFromText,
+          content: combinedContent,
+          parent_msg_id: branchPanel.hasStarted ? branchPanel.branchLeafId : branchPanel.branchPointId,
+          branch_from_message_id: branchPanel.branchPointId,
+          branch_from_text: branchPanel.branchFromText,
         }),
-      });
+      }) as SendMessageResponse;
 
       setMessages((prev) => [...prev, data.user_message, data.ai_message]);
 
-      setBranchPanel((prev) => ({
+      setBranchPanel((prev) => prev ? ({
         ...prev,
         branchLeafId: data.ai_message.id,
         input: "",
         hasStarted: true,
-      }));
+      }) : null);
     } 
     catch (err) {
-      setError(err.message || "Failed to send branch message");
+      setError(err instanceof Error ? err.message : "Failed to send branch message");
     } 
     finally {
       setSending(false);
     }
   }  
 
-  function updateConversationTitle(convo, selectedConversationId, trimmed) {
+  function updateConversationTitle(convo: Conversation, selectedConversationId: number, trimmed: string): Conversation {
     const isSelectedConversation = convo.id === selectedConversationId;
 
     if (!isSelectedConversation) {
@@ -331,35 +310,27 @@ export default function ChatPage() {
     };
   }
 
-  function normalizeSelectedText(selectedText) {
-      const cleaned = selectedText?.trim();
-      return cleaned ? cleaned : null;
+  function normalizeSelectedText(selectedText: string | null | undefined): string | null {
+    const cleaned = selectedText?.trim();
+    return cleaned ? cleaned : null;
   }
 
-  function findLatestBranchLeaf(startId, childrenMap) {
+  function findLatestBranchLeaf(startId: number, childrenMap: Map<number | null, Message[]>): number {
     let currentId = startId;
-  
     while (true) {
       const children = childrenMap.get(currentId) || [];
-  
-      const continuationChild = children.find((child) => {
-        return child.branch_from_message_id !== currentId;
-      });
-  
-      if (!continuationChild) {
-        return currentId;
-      }
-  
+      const continuationChild = children.find((child) => child.branch_from_message_id !== currentId);
+      if (!continuationChild) return currentId;
       currentId = continuationChild.id;
     }
   }
 
   function handleOpenBranch(
-    message,
-    selectedText = null,
-    childId = null,
-    sourceLeafId = null,
-    sourceBranchPointId = null
+    message: Message,
+    selectedText: string | null = null,
+    childId: number | null = null,
+    sourceLeafId: number | null = null,
+    sourceBranchPointId: number | null = null
   ) {
     const cleanedText = normalizeSelectedText(selectedText);
   
@@ -392,7 +363,7 @@ export default function ChatPage() {
     });
   }
 
-  function handleBranchToggle(messageId, childId = null, sourceLeafId = null, sourceBranchPointId = null) {
+  function handleBranchToggle(messageId: number, childId: number | null = null, sourceLeafId: number | null = null, sourceBranchPointId: number | null = null) {
     if (!childId) return;
   
     const leafId = findLatestBranchLeaf(childId, childrenMap) ?? childId;
@@ -450,7 +421,7 @@ export default function ChatPage() {
     }
   }, [branchPanel, rightFocusedMessageId, rightPath]);
 
-  function handleJumpToMessage(messageId, pane = "left") {
+  function handleJumpToMessage(messageId: number, pane: string = "left") {
     if (pane === "single") {
       setBranchPanel(null);
       setLeftFocusedMessageId(messageId);
@@ -486,8 +457,7 @@ export default function ChatPage() {
     }
   }
 
-  const handlePaneScroll = useCallback((pane, path) => (e) => {
-    console.log("scroll handler fired");
+  const handlePaneScroll = useCallback((pane: string, path: Message[]) => (e: React.UIEvent<HTMLDivElement>) => {
     //const container = messagesContainerRef.current;
     const container = e.currentTarget; 
     const containerRect = container.getBoundingClientRect();
@@ -547,11 +517,8 @@ export default function ChatPage() {
       onSelectConversation={setSelectedConversationId}
       onRenameConversation={handleRenameConversation}
       onDeleteConversation={handleDeleteConversation}
-      user={{
-        name: "James Yim",
-        email: "james@example.com",
-      }}
-      onLogout={() => console.log("logout")}
+      user={null}
+      onLogout={() => {}}
     />
     <TreeSidebar
           mainPath={mainPath}
@@ -581,7 +548,7 @@ export default function ChatPage() {
             setInput={setInput}
             onSendMessage={handleSendMessage}
             sending={sending}
-            onSelectMessage={setMainLeafId}
+            onSelectMessage={(msg) => setMainLeafId(msg.id)}
             onOpenBranch={handleOpenBranch}
             childrenMap={childrenMap}
             openBranchId={null}
@@ -604,10 +571,7 @@ export default function ChatPage() {
               onSendMessage={handleSendMessage}
               sending={sending}
               onSelectMessage={(msg) => {
-                setBranchPanel((prev) => ({
-                  ...prev,
-                  trunkLeafId: msg.id,
-                }));
+                setBranchPanel((prev) => prev ? ({ ...prev, trunkLeafId: msg.id }) : null);
               }}
               onOpenBranch={(message, selectedText, childId) =>
                 handleOpenBranch(
@@ -639,18 +603,12 @@ export default function ChatPage() {
               messages={rightPath}
               input={branchPanel.input}
               setInput={(value) =>
-                setBranchPanel((prev) => ({
-                  ...prev,
-                  input: value,
-                }))
+                setBranchPanel((prev) => prev ? ({ ...prev, input: value }) : null)
               }
               onSendMessage={handleSendBranchMessage}
               sending={sending}
               onSelectMessage={(msg) => {
-                setBranchPanel((prev) => ({
-                  ...prev,
-                  branchLeafId: msg.id,
-                }));
+                setBranchPanel((prev) => prev ? ({ ...prev, branchLeafId: msg.id }) : null);
               }}
               onOpenBranch={(message, selectedText, childId) =>
                 handleOpenBranch(

@@ -1,7 +1,8 @@
 import React from "react";
 import { getMessageLabel } from "../../api/messageHelpers";
+import type { Message, BranchPanel } from "../../types";
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   container: {
     padding: "8px 16px",
     fontSize: "12px",
@@ -13,17 +14,16 @@ const styles = {
     alignItems: "center",
     gap: "6px",
   },
-
-  crumb: {
-    color: "#f5f5dc",
-  },
-
-  separator: {
-    color: "#6e7a6e",
-  },
+  crumb: { color: "#f5f5dc" },
+  separator: { color: "#6e7a6e" },
 };
 
-export default function Breadcrumb({ branchPanel, messages = [] }) {
+interface Props {
+  branchPanel: BranchPanel | null;
+  messages?: Message[];
+}
+
+export default function Breadcrumb({ branchPanel, messages = [] }: Props) {
   const branchTrail = buildBranchTrail(branchPanel, messages);
 
   return (
@@ -40,30 +40,26 @@ export default function Breadcrumb({ branchPanel, messages = [] }) {
   );
 }
 
-function buildBranchTrail(branchPanel, messages) {
+function buildBranchTrail(branchPanel: BranchPanel | null, messages: Message[]): { id: number; label: string }[] {
   if (!branchPanel) return [];
 
   const byId = new Map(messages.map((msg) => [msg.id, msg]));
-  const trail = [];
+  const trail: { id: number; label: string }[] = [];
 
-  let current = byId.get(branchPanel.branchPointId);
+  let current: Message | undefined = byId.get(branchPanel.branchPointId);
 
   while (current) {
-    trail.unshift({
-      id: current.id,
-      label: getMessageLabel(current),
-    });
+    trail.unshift({ id: current.id, label: getMessageLabel(current) });
 
-    let walker = byId.get(current.parent_msg_id);
-    let parentBranchPoint = null;
+    let walker: Message | undefined = current.parent_msg_id ? byId.get(current.parent_msg_id) : undefined;
+    let parentBranchPoint: Message | undefined = undefined;
 
     while (walker) {
       if (walker.branch_from_message_id) {
         parentBranchPoint = byId.get(walker.branch_from_message_id);
         break;
       }
-
-      walker = byId.get(walker.parent_msg_id);
+      walker = walker.parent_msg_id ? byId.get(walker.parent_msg_id) : undefined;
     }
 
     current = parentBranchPoint;

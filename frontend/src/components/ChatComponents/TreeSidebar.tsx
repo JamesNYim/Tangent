@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { getMessageLabel } from "../../api/messageHelpers";
+import type { Message } from "../../types";
 
 const NODE_SIZE = 12;
 const ROW_HEIGHT = 28;
@@ -11,7 +12,7 @@ const MIN_SIDEBAR_WIDTH = 60;
 const MAX_SIDEBAR_WIDTH = 420;
 const DEFAULT_SIDEBAR_WIDTH = 180;
 
-const styles = {
+const styles: Record<string, React.CSSProperties> = {
   sidebar: {
     position: "relative",
     width: `${DEFAULT_SIDEBAR_WIDTH}px`,
@@ -25,7 +26,6 @@ const styles = {
     overflowX: "hidden",
     boxSizing: "border-box",
   },
-
   resizeHandle: {
     position: "absolute",
     top: 0,
@@ -36,7 +36,6 @@ const styles = {
     background: "transparent",
     zIndex: 20,
   },
-
   title: {
     fontSize: "12px",
     fontWeight: "bold",
@@ -45,17 +44,8 @@ const styles = {
     color: "#a9b192",
     marginBottom: "12px",
   },
-
-  empty: {
-    color: "#a9b192",
-    fontSize: "13px",
-  },
-
-  row: {
-    position: "relative",
-    minHeight: `${ROW_HEIGHT}px`,
-  },
-
+  empty: { color: "#a9b192", fontSize: "13px" },
+  row: { position: "relative", minHeight: `${ROW_HEIGHT}px` },
   mainNode: {
     position: "absolute",
     left: "0px",
@@ -69,18 +59,12 @@ const styles = {
     cursor: "pointer",
     zIndex: 2,
   },
-
-  leftFocusedNode: {
-    background: "#d8dcc8",
-    scale: "1.25",
-  },
-
+  leftFocusedNode: { background: "#d8dcc8", scale: "1.25" },
   rightFocusedNode: {
     background: "#9fb39f",
     scale: "1.25",
     boxShadow: "0 0 0 3px rgba(159, 179, 159, 0.35)",
   },
-
   mainVertical: {
     position: "absolute",
     left: "5px",
@@ -88,19 +72,8 @@ const styles = {
     width: "2px",
     background: "#6a7261",
   },
-
-  branchHorizontal: {
-    position: "absolute",
-    height: "2px",
-    background: "#9fb39f",
-  },
-
-  branchVertical: {
-    position: "absolute",
-    width: "2px",
-    background: "#9fb39f",
-  },
-
+  branchHorizontal: { position: "absolute", height: "2px", background: "#9fb39f" },
+  branchVertical: { position: "absolute", width: "2px", background: "#9fb39f" },
   branchNode: {
     position: "absolute",
     width: `${NODE_SIZE}px`,
@@ -114,83 +87,69 @@ const styles = {
   },
 };
 
-function getChildren(childrenMap, messageID) {
+function getChildren(childrenMap: Map<number | null, Message[]>, messageID: number): Message[] {
   return childrenMap.get(messageID) || [];
 }
 
-function findLatestVisibleLeaf(startId, childrenMap) {
+function findLatestVisibleLeaf(startId: number, childrenMap: Map<number | null, Message[]>): number {
   let currentId = startId;
-
   while (true) {
     const children = getChildren(childrenMap, currentId);
-
-    const continuationChild = children.find(
-      (child) => child.branch_from_message_id !== currentId
-    );
-
-    if (!continuationChild) {
-      return currentId;
-    }
-
+    const continuationChild = children.find((child) => child.branch_from_message_id !== currentId);
+    if (!continuationChild) return currentId;
     currentId = continuationChild.id;
   }
 }
 
-function getSubtreeHeight(node, childrenMap) {
+function getSubtreeHeight(node: Message, childrenMap: Map<number | null, Message[]>): number {
   const children = getChildren(childrenMap, node.id);
-
-  if (children.length === 0) {
-    return BRANCH_Y_STEP;
-  }
-
+  if (children.length === 0) return BRANCH_Y_STEP;
   let totalHeight = BRANCH_Y_STEP;
-
   for (const child of children) {
     const isExplicitBranch = child.branch_from_message_id === node.id;
-
     if (isExplicitBranch) {
-      totalHeight = Math.max(
-        totalHeight,
-        ROW_HEIGHT + getSubtreeHeight(child, childrenMap)
-      );
+      totalHeight = Math.max(totalHeight, ROW_HEIGHT + getSubtreeHeight(child, childrenMap));
     } else {
       totalHeight += getSubtreeHeight(child, childrenMap);
     }
   }
-
   return totalHeight;
 }
 
-function getSubtreeWidth(node, childrenMap) {
+function getSubtreeWidth(node: Message, childrenMap: Map<number | null, Message[]>): number {
   const children = getChildren(childrenMap, node.id);
-
-  if (children.length === 0) {
-    return BRANCH_X_STEP;
-  }
-
+  if (children.length === 0) return BRANCH_X_STEP;
   let maxWidth = BRANCH_X_STEP;
-
   for (const child of children) {
     const isExplicitBranch = child.branch_from_message_id === node.id;
-
     const childWidth = isExplicitBranch
       ? BRANCH_X_STEP + getSubtreeWidth(child, childrenMap)
       : getSubtreeWidth(child, childrenMap);
-
     maxWidth = Math.max(maxWidth, childWidth);
   }
-
   return maxWidth;
 }
 
-function getBranchX(branchChildren, branchIndex, childrenMap) {
+function getBranchX(branchChildren: Message[], branchIndex: number, childrenMap: Map<number | null, Message[]>): number {
   let priorWidth = 0;
-
   for (const sibling of branchChildren.slice(0, branchIndex)) {
     priorWidth += getSubtreeWidth(sibling, childrenMap);
   }
-
   return FIRST_BRANCH_OFFSET + priorWidth;
+}
+
+interface BranchSubtreeProps {
+  node: Message;
+  childrenMap: Map<number | null, Message[]>;
+  onBranchToggle?: (containingBranchPointId: number, rootBranchChildId: number, sourceLeafId: number, sourceBranchPointId: number | null) => void;
+  x: number;
+  y: number;
+  leftFocusedMessageId: number | null;
+  rightFocusedMessageId: number | null;
+  sourceLeafId: number | null;
+  sourceBranchPointId: number | null;
+  containingBranchPointId: number;
+  rootBranchChildId: number;
 }
 
 function BranchSubtree({
@@ -205,7 +164,7 @@ function BranchSubtree({
   sourceBranchPointId,
   containingBranchPointId,
   rootBranchChildId,
-}) {
+}: BranchSubtreeProps) {
   const children = getChildren(childrenMap, node.id);
   const isLeftFocused = node.id === leftFocusedMessageId;
   const isRightFocused = node.id === rightFocusedMessageId;
@@ -306,6 +265,16 @@ function BranchSubtree({
   );
 }
 
+interface Props {
+  mainPath?: Message[];
+  childrenMap?: Map<number | null, Message[]>;
+  leftFocusedMessageId?: number | null;
+  rightFocusedMessageId?: number | null;
+  activeLastLeafId?: number | null;
+  onJumpToMessage?: (id: number, pane: string) => void;
+  onBranchToggle?: (containingBranchPointId: number, rootBranchChildId: number, sourceLeafId: number, sourceBranchPointId: number | null) => void;
+}
+
 export default function TreeSidebar({
   mainPath = [],
   childrenMap = new Map(),
@@ -314,23 +283,17 @@ export default function TreeSidebar({
   activeLastLeafId = null,
   onJumpToMessage,
   onBranchToggle,
-}) {
+}: Props) {
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH);
   const isResizingRef = useRef(false);
   const startXRef = useRef(0);
   const startWidthRef = useRef(DEFAULT_SIDEBAR_WIDTH);
 
   useEffect(() => {
-    function handleMouseMove(e) {
+    function handleMouseMove(e: MouseEvent) {
       if (!isResizingRef.current) return;
-
       const deltaX = e.clientX - startXRef.current;
-
-      const nextWidth = Math.min(
-        Math.max(startWidthRef.current + deltaX, MIN_SIDEBAR_WIDTH),
-        MAX_SIDEBAR_WIDTH
-      );
-
+      const nextWidth = Math.min(Math.max(startWidthRef.current + deltaX, MIN_SIDEBAR_WIDTH), MAX_SIDEBAR_WIDTH);
       setSidebarWidth(nextWidth);
     }
 
@@ -342,25 +305,22 @@ export default function TreeSidebar({
 
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
-
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
     };
   }, []);
 
-  function handleResizeStart(e) {
+  function handleResizeStart(e: React.MouseEvent) {
     e.preventDefault();
-
     isResizingRef.current = true;
     startXRef.current = e.clientX;
     startWidthRef.current = sidebarWidth;
-
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   }
 
-  const sidebarStyle = {
+  const sidebarStyle: React.CSSProperties = {
     ...styles.sidebar,
     width: `${sidebarWidth}px`,
     minWidth: `${sidebarWidth}px`,
