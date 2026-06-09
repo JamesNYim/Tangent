@@ -1,8 +1,10 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
 import ChatWindow from "../components/ChatComponents/ChatWindow";
 import TreeSidebar from "../components/ChatComponents/TreeSidebar";
 import Breadcrumb from "../components/ChatComponents/Breadcrumb";
 import Sidebar from "../components/Sidebar";
+import { useAuth } from "../auth/AuthContext";
 import { api } from "../api/client";
 import {
   createConversation,
@@ -77,6 +79,8 @@ function buildChildrenMap(messages: Message[]): Map<number | null, Message[]> {
 }
 
 export default function ChatPage() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const messageRefs = useRef(new Map<number, HTMLDivElement>());
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedConversationId, setSelectedConversationId] = useState<number | null>(null);
@@ -517,8 +521,8 @@ export default function ChatPage() {
       onSelectConversation={setSelectedConversationId}
       onRenameConversation={handleRenameConversation}
       onDeleteConversation={handleDeleteConversation}
-      user={null}
-      onLogout={() => {}}
+      user={user}
+      onLogout={() => { logout(); navigate("/login"); }}
     />
     <TreeSidebar
           mainPath={mainPath}
