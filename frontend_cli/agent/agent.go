@@ -38,6 +38,10 @@ type ToolDef struct {
 	InputSchema interface{}
 }
 
+type OnToolFn func(msg string)
+
+type ConfirmFn func(name, msg, preview string) bool
+
 // ── Provider interface ────────────────────────────────────────────────────────
 
 // Provider is implemented by each AI backend (Anthropic, OpenAI, etc.).
@@ -65,8 +69,8 @@ var DefaultModels = map[string]string{
 }
 
 func DefaultModel(provider string) string {
-	if m, ok := DefaultModels[provider]; ok {
-		return m
+	if model, ok := DefaultModels[provider]; ok {
+		return model
 	}
 	return ""
 }
@@ -79,18 +83,18 @@ type Agent struct {
 }
 
 func New(apiKey, providerName, model string) (*Agent, error) {
-	p, err := NewProvider(providerName, apiKey, model)
+	aiProvider, err := NewProvider(providerName, apiKey, model)
 	if err != nil {
 		return nil, err
 	}
 	cwd, _ := os.Getwd()
-	return &Agent{provider: p, cwd: cwd}, nil
+	return &Agent{provider: aiProvider, cwd: cwd}, nil
 }
 
 // Run appends userMsg to history, runs the agentic loop until the provider
 // stops making tool calls, and returns the final text plus updated history.
 // onTool is called each time a tool is invoked so the UI can show feedback.
-func (a *Agent) Run(history []Turn, userMsg string, onTool func(name string)) (string, []Turn, error) {
+func (a *Agent) Run(history []Turn, userMsg string, onTool OnToolFn, confirm ConfirmFn) (string, []Turn, error) {
 	history = append(history, Turn{Role: "user", Text: userMsg})
 
 	for {
@@ -105,12 +109,27 @@ func (a *Agent) Run(history []Turn, userMsg string, onTool func(name string)) (s
 			return text, history, nil
 		}
 
-		// Execute each tool call and collect results
 		var results []ToolResult
 		for _, call := range calls {
-			if onTool != nil {
-				onTool(call.Name)
+
+			// Confirming Tool
+			tool, toolExists := toolBox[call.Name]
+			if toolExists && tool.RequiresConfirmation {
+				preview := generateDiff(a.cwd, call.Name, call.Input)
+				if confirm == nil || !confirm(call.Name, formatToolMsg(call.Name, call.Input), preview) {
+					results = append(results, ToolResult{
+						CallID:  call.ID,
+						Content: "user declined to execute this tool",
+					})
+					continue
+				}
 			}
+
+			// Notify UI only after confirmation
+			if onTool != nil {
+				onTool(formatToolMsg(call.Name, call.Input))
+			}
+
 			results = append(results, ToolResult{
 				CallID:  call.ID,
 				Content: a.executeTool(call.Name, call.Input),
@@ -120,128 +139,82 @@ func (a *Agent) Run(history []Turn, userMsg string, onTool func(name string)) (s
 	}
 }
 
-func (a *Agent) systemPrompt() string {
-	return fmt.Sprintf(`You are Tangent, an AI coding assistant running in a project directory. You can read files, search code, and run commands to help answer questions about the codebase.
+func generateDiff(cwd, name string, input map[string]string) string {
+	if name != "write_file" {
+		return ""
+	}
 
-Working directory: %s
+	newContent := input["content"]
+	fullPath := filepath.Join(cwd, input["path"])
 
-Use tools to explore the codebase when needed. Be concise and specific.`, a.cwd)
+	// new file — show all lines as additions
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		var b strings.Builder
+		b.WriteString("new file: " + input["path"] + "\n")
+		for _, line := range strings.Split(newContent, "\n") {
+			b.WriteString("+ " + line + "\n")
+		}
+		return b.String()
+	}
+
+	// existing file — write new content to temp file and diff
+	tmp, err := os.CreateTemp("", "tangent-*")
+	if err != nil {
+		return ""
+	}
+	defer os.Remove(tmp.Name())
+	tmp.WriteString(newContent)
+	tmp.Close()
+
+	if _, err := exec.LookPath("git"); err == nil {
+		out, _ := exec.Command("git", "diff", "--no-index", "--color=never", fullPath, tmp.Name()).Output()
+		if len(out) == 0 {
+			return "(no changes)"
+		}
+		lines := strings.Split(string(out), "\n")
+		if len(lines) > 4 {
+			return strings.Join(lines[4:], "\n")
+		}
+		return string(out)
+	}
+
+	// fallback: use diff if git is not installed
+	out, _ := exec.Command("diff", "-u", fullPath, tmp.Name()).Output()
+	if len(out) == 0 {
+		return "(no changes)"
+	}
+	return string(out)
 }
 
-// ── Tool definitions ──────────────────────────────────────────────────────────
-
-var fileTools = []ToolDef{
-	{
-		Name:        "read_file",
-		Description: "Read the contents of a file",
-		InputSchema: map[string]interface{}{
-			"type": "object",
-			"properties": map[string]interface{}{
-				"path": map[string]interface{}{
-					"type":        "string",
-					"description": "Relative path to the file",
-				},
-			},
-			"required": []string{"path"},
-		},
-	},
-	{
-		Name:        "list_directory",
-		Description: "List files and directories at a path",
-		InputSchema: map[string]interface{}{
-			"type": "object",
-			"properties": map[string]interface{}{
-				"path": map[string]interface{}{
-					"type":        "string",
-					"description": "Relative path to list (default: .)",
-				},
-			},
-		},
-	},
-	{
-		Name:        "search_files",
-		Description: "Search for a pattern across files using grep",
-		InputSchema: map[string]interface{}{
-			"type": "object",
-			"properties": map[string]interface{}{
-				"pattern": map[string]interface{}{
-					"type":        "string",
-					"description": "Search pattern",
-				},
-				"path": map[string]interface{}{
-					"type":        "string",
-					"description": "Directory to search in (default: .)",
-				},
-			},
-			"required": []string{"pattern"},
-		},
-	},
-	{
-		Name:        "run_command",
-		Description: "Run a shell command in the project directory",
-		InputSchema: map[string]interface{}{
-			"type": "object",
-			"properties": map[string]interface{}{
-				"command": map[string]interface{}{
-					"type":        "string",
-					"description": "Shell command to run",
-				},
-			},
-			"required": []string{"command"},
-		},
-	},
-}
-
-// ── Tool execution ────────────────────────────────────────────────────────────
-
-func (a *Agent) executeTool(name string, input map[string]string) string {
+func formatToolMsg(name string, input map[string]string) string {
 	switch name {
 	case "read_file":
-		data, err := os.ReadFile(filepath.Join(a.cwd, input["path"]))
-		if err != nil {
-			return fmt.Sprintf("error: %v", err)
-		}
-		return string(data)
-
+		return "reading " + input["path"]
 	case "list_directory":
 		p := input["path"]
 		if p == "" {
 			p = "."
 		}
-		entries, err := os.ReadDir(filepath.Join(a.cwd, p))
-		if err != nil {
-			return fmt.Sprintf("error: %v", err)
-		}
-		var lines []string
-		for _, e := range entries {
-			if e.IsDir() {
-				lines = append(lines, e.Name()+"/")
-			} else {
-				lines = append(lines, e.Name())
-			}
-		}
-		return strings.Join(lines, "\n")
-
+		return "listing " + p
 	case "search_files":
-		p := input["path"]
-		if p == "" {
-			p = "."
-		}
-		out, _ := exec.Command("grep", "-r", "-n", input["pattern"], filepath.Join(a.cwd, p)).Output()
-		if len(out) == 0 {
-			return "(no matches)"
-		}
-		return string(out)
-
+		return "searching: " + input["pattern"]
 	case "run_command":
-		cmd := exec.Command("sh", "-c", input["command"])
-		cmd.Dir = a.cwd
-		out, err := cmd.CombinedOutput()
-		if err != nil {
-			return fmt.Sprintf("%s\nerror: %v", string(out), err)
-		}
-		return string(out)
+		return "running: " + input["command"]
+	case "write_file":
+		return "writing " + input["path"]
+	default:
+		return "calling " + name
 	}
+}
 
-	return fmt.Sprintf("unknown tool: %s", name)
+func (a *Agent) systemPrompt() string {
+	return fmt.Sprintf(`You are Tangent, an AI coding assistant running in a project directory. You have tools to read files, write files, list directories, search code, and run shell commands.
+
+Working directory: %s
+
+Rules:
+- Always use tools to perform actions. Never describe what you would do — just do it.
+- When asked to create or modify a file, call write_file immediately. Do not ask for permission first — the user will be prompted to confirm before anything is written.
+- Never output file contents into the conversation. Write them to disk with write_file.
+- Be concise. Act, then briefly summarize what you did.`, a.cwd)
 }

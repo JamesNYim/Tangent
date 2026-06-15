@@ -28,33 +28,51 @@ var providers = []string{"anthropic", "openai"}
 
 var (
 	headerStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#9fb39f")).
+			Foreground(lipgloss.Color("#87af87")). // sage green (256-color #108)
 			Bold(true)
 
 	branchHeaderStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#bb8954")).
+				Foreground(lipgloss.Color("#d7875f")). // amber (256-color #173)
 				Bold(true)
 
 	userStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#d8dcc8"))
+			Foreground(lipgloss.Color("#d7d7d7")) // off-white (256-color #188)
 
 	aiStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#9fb39f"))
+		Foreground(lipgloss.Color("#87af87")) // sage green (256-color #108)
 
 	selectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#bb8954")).
+			Foreground(lipgloss.Color("#d7875f")). // amber (256-color #173)
 			Bold(true)
 
 	errorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#ff8a8a"))
+			Foreground(lipgloss.Color("#ff8787")) // soft red (256-color #210)
 
 	hintStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#6a7261"))
+			Foreground(lipgloss.Color("#878787")) // mid grey (256-color #102)
 
 	dividerStyle = lipgloss.NewStyle().
 			BorderLeft(true).
 			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("#6a7261"))
+			BorderForeground(lipgloss.Color("#585858")) // dark grey (256-color #240)
+
+	previewStyle = lipgloss.NewStyle().
+			BorderLeft(true).
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("#d7875f")). // amber border (256-color #173)
+			PaddingLeft(1)
+
+	diffAddStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#87af87")) // soft green — added lines
+
+	diffRemoveStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#d75f5f")) // soft red — removed lines
+
+	diffHunkStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#5f87af")) // muted blue — @@ hunk headers
+
+	diffDefaultStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#878787")) // mid grey (256-color #102)
 )
 
 // ── Async message types ───────────────────────────────────────────────────────
@@ -65,6 +83,32 @@ type sendDoneMsg struct {
 	history  []agent.Turn
 	isBranch bool
 	err      error
+}
+
+type toolUpdateMsg string
+
+type confirmRequestMsg struct {
+	msg     string
+	preview string
+}
+
+func waitForConfirm(ch chan confirmRequestMsg) tea.Cmd {
+	return func() tea.Msg {
+		req, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return req
+	}
+}
+func waitForTool(ch chan string) tea.Cmd {
+	return func() tea.Msg {
+		name, ok := <-ch
+		if !ok {
+			return nil
+		}
+		return toolUpdateMsg(name)
+	}
 }
 
 // ── Rendered message ──────────────────────────────────────────────────────────
@@ -102,7 +146,17 @@ type Model struct {
 	branchMsgs    []renderMsg
 	branchVP      viewport.Model
 
-	ta textarea.Model
+	// tool confirm
+	confirming        bool
+	confirmMsg        string
+	confirmPreview    string
+	confirmMsgCh      chan confirmRequestMsg
+	confirmResponseCh chan bool
+
+	ta     textarea.Model
+	toolCh chan string
+
+
 }
 
 func New() Model {
@@ -231,9 +285,25 @@ func (m Model) updateSetup(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case toolUpdateMsg:
+		m.toolMsg = string(msg)
+		return m, waitForTool(m.toolCh)
+
+	case confirmRequestMsg:
+		m.confirming = true
+		m.confirmMsg = msg.msg
+		m.confirmPreview = msg.preview
+		return m, nil
+
 	case sendDoneMsg:
 		m.loading = false
 		m.toolMsg = ""
+		m.toolCh = nil
+		m.confirming = false
+		m.confirmMsg = ""
+		m.confirmPreview = ""
+		m.confirmMsgCh = nil
+		m.confirmResponseCh = nil
 		if msg.err != nil {
 			m.err = msg.err.Error()
 			return m, nil
@@ -256,6 +326,19 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		if m.confirming {
+			switch msg.String() {
+			case "y":
+				m.confirming = false
+				m.confirmResponseCh <- true
+				return m, waitForConfirm(m.confirmMsgCh)
+			case "n":
+				m.confirming = false
+				m.confirmResponseCh <- false
+				return m, waitForConfirm(m.confirmMsgCh)
+			}
+			return m, nil
+		}
 		if m.loading {
 			return m, nil
 		}
@@ -277,21 +360,43 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.resizeViewports()
 				}
 				m.loading = true
+				m.toolCh = make(chan string, 10)
 				history := m.branchHistory
 				ag := m.ag
-				return m, func() tea.Msg {
-					aiText, newHistory, err := ag.Run(history, question, nil)
-					return sendDoneMsg{userMsg: question, aiMsg: aiText, history: newHistory, isBranch: true, err: err}
-				}
+				toolCh := m.toolCh
+				return m, tea.Batch(
+					waitForTool(toolCh),
+					func() tea.Msg {
+						aiText, newHistory, err := ag.Run(history, question, func(msg string) { toolCh <- msg }, nil)
+						close(toolCh)
+						return sendDoneMsg{userMsg: question, aiMsg: aiText, history: newHistory, isBranch: true, err: err}
+					},
+				)
 			}
 
 			m.loading = true
+			m.toolCh = make(chan string, 10)
+			m.confirmMsgCh = make(chan confirmRequestMsg, 1)
+			m.confirmResponseCh = make(chan bool, 1)
 			history := m.mainHistory
 			ag := m.ag
-			return m, func() tea.Msg {
-				aiText, newHistory, err := ag.Run(history, input, nil)
-				return sendDoneMsg{userMsg: input, aiMsg: aiText, history: newHistory, isBranch: false, err: err}
-			}
+			toolCh := m.toolCh
+			confirmMsgCh := m.confirmMsgCh
+			confirmResponseCh := m.confirmResponseCh
+			confirmFn := agent.ConfirmFn(func(name, msg, preview string) bool {
+				confirmMsgCh <- confirmRequestMsg{msg: msg, preview: preview}
+				return <-confirmResponseCh
+			})
+			return m, tea.Batch(
+				waitForTool(toolCh),
+				waitForConfirm(confirmMsgCh),
+				func() tea.Msg {
+					aiText, newHistory, err := ag.Run(history, input, func(msg string) { toolCh <- msg }, confirmFn)
+					close(toolCh)
+					close(confirmMsgCh)
+					return sendDoneMsg{userMsg: input, aiMsg: aiText, history: newHistory, isBranch: false, err: err}
+				},
+			)
 
 		case "tab":
 			if m.branchOpen {
@@ -415,9 +520,11 @@ func (m Model) chatView() string {
 	}
 
 	hint := "enter · send   /branch <question> · open branch   tab · switch pane   ctrl+w · close branch   ctrl+c · quit"
-	if m.loading {
+	if m.confirming {
+		hint = "  " + m.confirmMsg + "   y · confirm   n · deny"
+	} else if m.loading {
 		if m.toolMsg != "" {
-			hint = "  calling " + m.toolMsg + "..."
+			hint = "  " + m.toolMsg + "..."
 		} else {
 			hint = "  thinking..."
 		}
@@ -426,15 +533,32 @@ func (m Model) chatView() string {
 		hint = m.err
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left,
-		header,
-		body,
-		m.ta.View(),
-		hintStyle.Render(hint),
-	)
+	parts := []string{header, body}
+	if m.confirming && m.confirmPreview != "" {
+		parts = append(parts, previewStyle.Render(renderDiff(m.confirmPreview)))
+	}
+	parts = append(parts, m.ta.View(), hintStyle.Render(hint))
+	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
 // ── Render helpers ────────────────────────────────────────────────────────────
+
+func renderDiff(diff string) string {
+	var b strings.Builder
+	for _, line := range strings.Split(diff, "\n") {
+		switch {
+		case strings.HasPrefix(line, "+"):
+			b.WriteString(diffAddStyle.Render(line) + "\n")
+		case strings.HasPrefix(line, "-"):
+			b.WriteString(diffRemoveStyle.Render(line) + "\n")
+		case strings.HasPrefix(line, "@@"):
+			b.WriteString(diffHunkStyle.Render(line) + "\n")
+		default:
+			b.WriteString(diffDefaultStyle.Render(line) + "\n")
+		}
+	}
+	return b.String()
+}
 
 func renderMessages(msgs []renderMsg, width int) string {
 	if width < 20 {
