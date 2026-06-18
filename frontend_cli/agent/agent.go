@@ -87,7 +87,10 @@ func New(apiKey, providerName, model string) (*Agent, error) {
 	if err != nil {
 		return nil, err
 	}
-	cwd, _ := os.Getwd()
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("could not determine working directory: %w", err)
+	}
 	return &Agent{provider: aiProvider, cwd: cwd}, nil
 }
 

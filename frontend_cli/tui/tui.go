@@ -24,55 +24,87 @@ const (
 
 var providers = []string{"anthropic", "openai"}
 
+// ── Colors ────────────────────────────────────────────────────────────────────
+
+var (
+	colorSelect   = lipgloss.Color("#87af87") // selection highlight
+	colorSelectBg = lipgloss.Color("#1a2e1a") // background tint behind selected text
+	colorDim      = lipgloss.Color("#585858") // dimmed borders/text in select mode
+)
+
 // ── Styles ────────────────────────────────────────────────────────────────────
 
 var (
 	headerStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#87af87")). // sage green (256-color #108)
+			Foreground(lipgloss.Color("#d7875f")).
 			Bold(true)
 
 	branchHeaderStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#d7875f")). // amber (256-color #173)
+				Foreground(lipgloss.Color("#d7875f")).
 				Bold(true)
 
-	userStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#d7d7d7")) // off-white (256-color #188)
+	userMsgStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#ffffff")).
+			Bold(true)
 
-	aiStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#87af87")) // sage green (256-color #108)
+	actionMsgStyle = lipgloss.NewStyle().
+			Foreground(colorDim)
+
+	chatMsgStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#d7d7d7"))
+
+	codeMsgStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(colorDim).
+			Foreground(lipgloss.Color("#ff0000")).
+			Padding(0, 1)
 
 	selectedStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#d7875f")). // amber (256-color #173)
+			Foreground(colorSelect).
+			Background(colorSelectBg).
 			Bold(true)
 
 	errorStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#ff8787")) // soft red (256-color #210)
+			Foreground(lipgloss.Color("#ff8787"))
 
 	hintStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#878787")) // mid grey (256-color #102)
+			Foreground(lipgloss.Color("#878787"))
 
 	dividerStyle = lipgloss.NewStyle().
 			BorderLeft(true).
 			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("#585858")) // dark grey (256-color #240)
+			BorderForeground(colorDim)
 
 	previewStyle = lipgloss.NewStyle().
 			BorderLeft(true).
 			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(lipgloss.Color("#d7875f")). // amber border (256-color #173)
+			BorderForeground(colorDim).
 			PaddingLeft(1)
 
 	diffAddStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#87af87")) // soft green — added lines
+			Foreground(lipgloss.Color("#87af87"))
 
 	diffRemoveStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#d75f5f")) // soft red — removed lines
+			Foreground(lipgloss.Color("#d75f5f"))
 
 	diffHunkStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#5f87af")) // muted blue — @@ hunk headers
+			Foreground(lipgloss.Color("#5f87af"))
 
 	diffDefaultStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#878787")) // mid grey (256-color #102)
+			Foreground(lipgloss.Color("#878787"))
+
+	lineRangeStyle = lipgloss.NewStyle().
+			Foreground(colorSelect).
+			Background(colorSelectBg)
+
+	selectBarStyle = lipgloss.NewStyle().
+			BorderLeft(true).
+			BorderStyle(lipgloss.ThickBorder()).
+			BorderForeground(colorSelect).
+			PaddingLeft(1)
+
+	codeLineStyle = lipgloss.NewStyle().
+			Foreground(diffAddStyle.GetForeground())
 )
 
 // ── Async message types ───────────────────────────────────────────────────────
@@ -113,8 +145,24 @@ func waitForTool(ch chan string) tea.Cmd {
 
 // ── Rendered message ──────────────────────────────────────────────────────────
 
+type lineSelectInfo struct {
+	msgIdx int
+	cursor int
+	anchor int // -1 = no anchor yet
+}
+
+type msgKind int
+
+const (
+	msgKindUser   msgKind = iota // punchy user prompt
+	msgKindAction                // "reading file..." tool status
+	msgKindChat                  // AI prose response
+	msgKindCode                  // code block / generated content
+	msgKindDiff                  // diff preview from a file write confirmation
+)
+
 type renderMsg struct {
-	role    string
+	kind    msgKind
 	content string
 }
 
@@ -153,22 +201,38 @@ type Model struct {
 	confirmMsgCh      chan confirmRequestMsg
 	confirmResponseCh chan bool
 
-	ta     textarea.Model
-	toolCh chan string
+	ta            textarea.Model
+	toolCh        chan string
+	loadingBranch bool
 
+	// input history (↑/↓ to cycle)
+	inputHistory []string
+	historyIdx   int
+	historyDraft string
 
+	// branch close confirmation
+	closingBranch bool
+
+	// select mode — navigate messages with ↑/↓, branch on selection with enter
+	selecting       bool
+	selectIdx       int  // index into the active pane's msgs (-1 = none)
+	selectingBranch bool // navigating branchMsgs vs mainMsgs
+	branchContext   string
+
+	// line-select sub-mode (entered from message-select via enter)
+	lineSelect  bool
+	lineCursor  int
+	lineAnchor  int // -1 = no anchor
 }
 
 func New() Model {
-	cfg, _ := config.Load()
-
 	keyInput := textinput.New()
 	keyInput.Placeholder = "sk-ant-..."
 	keyInput.EchoMode = textinput.EchoPassword
 	keyInput.EchoCharacter = '•'
 
 	ta := textarea.New()
-	ta.Placeholder = "Type a message...  /branch <question> to open branch pane"
+	ta.Placeholder = "Type a message..."
 	ta.Focus()
 	ta.CharLimit = 0
 	ta.SetHeight(3)
@@ -177,17 +241,29 @@ func New() Model {
 	m := Model{
 		setupInput: keyInput,
 		ta:         ta,
+		historyIdx: -1,
+		selectIdx:  -1,
+		lineAnchor: -1,
 	}
 
-	// Skip setup if already configured
+	cfg, err := config.Load()
+	if err != nil {
+		m.state = stateSetup
+		m.err = fmt.Sprintf("config error: %v", err)
+		return m
+	}
+
 	if cfg.IsReady() {
-		if ag, err := agent.New(cfg.APIKeys[cfg.Provider], cfg.Provider, agent.DefaultModel(cfg.Provider)); err == nil {
-			m.ag = ag
+		ag, err := agent.New(cfg.APIKeys[cfg.Provider], cfg.Provider, agent.DefaultModel(cfg.Provider))
+		if err != nil {
+			m.state = stateSetup
+			m.err = fmt.Sprintf("could not start agent: %v", err)
+			return m
 		}
+		m.ag = ag
 		m.state = stateChat
 	} else {
 		m.state = stateSetup
-		m.setupFocused = 0
 	}
 
 	return m
@@ -287,12 +363,34 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case toolUpdateMsg:
 		m.toolMsg = string(msg)
+		action := renderMsg{kind: msgKindAction, content: string(msg)}
+		if m.loadingBranch {
+			m.branchMsgs = append(m.branchMsgs, action)
+			m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width, -1, nil))
+			m.branchVP.GotoBottom()
+		} else {
+			m.mainMsgs = append(m.mainMsgs, action)
+			m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width, -1, nil))
+			m.mainVP.GotoBottom()
+		}
 		return m, waitForTool(m.toolCh)
 
 	case confirmRequestMsg:
 		m.confirming = true
 		m.confirmMsg = msg.msg
 		m.confirmPreview = msg.preview
+		if msg.preview != "" {
+			diff := renderMsg{kind: msgKindDiff, content: msg.preview}
+			if m.loadingBranch {
+				m.branchMsgs = append(m.branchMsgs, diff)
+				m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width, -1, nil))
+				m.branchVP.GotoBottom()
+			} else {
+				m.mainMsgs = append(m.mainMsgs, diff)
+				m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width, -1, nil))
+				m.mainVP.GotoBottom()
+			}
+		}
 		return m, nil
 
 	case sendDoneMsg:
@@ -309,23 +407,126 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.err = ""
-		user := renderMsg{"user", msg.userMsg}
-		ai := renderMsg{"ai", msg.aiMsg}
+		m.loadingBranch = false
+		aiMsgs := parseAIResponse(msg.aiMsg)
 
 		if msg.isBranch {
 			m.branchHistory = msg.history
-			m.branchMsgs = append(m.branchMsgs, user, ai)
-			m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width))
+			m.branchMsgs = append(m.branchMsgs, aiMsgs...)
+			m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width, -1, nil))
 			m.branchVP.GotoBottom()
 		} else {
 			m.mainHistory = msg.history
-			m.mainMsgs = append(m.mainMsgs, user, ai)
-			m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width))
+			m.mainMsgs = append(m.mainMsgs, aiMsgs...)
+			m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width, -1, nil))
 			m.mainVP.GotoBottom()
 		}
 		return m, nil
 
 	case tea.KeyMsg:
+		// ── Select mode (runs even during confirming) ─────────────────────────
+		if m.selecting {
+			msgs := m.mainMsgs
+			if m.selectingBranch {
+				msgs = m.branchMsgs
+			}
+
+			// Line-select sub-mode
+			if m.lineSelect && m.selectIdx >= 0 && m.selectIdx < len(msgs) {
+				lines := strings.Split(strings.TrimRight(msgs[m.selectIdx].content, "\n"), "\n")
+				switch msg.String() {
+				case "up":
+					if m.lineCursor > 0 {
+						m.lineCursor--
+						(&m).refreshSelectView()
+					}
+				case "down":
+					if m.lineCursor < len(lines)-1 {
+						m.lineCursor++
+						(&m).refreshSelectView()
+					}
+				case " ":
+					if m.lineAnchor == -1 {
+						m.lineAnchor = m.lineCursor
+					} else {
+						m.lineAnchor = -1
+					}
+					(&m).refreshSelectView()
+				case "enter":
+					lo, hi := m.lineCursor, m.lineCursor
+					if m.lineAnchor >= 0 {
+						lo, hi = m.lineAnchor, m.lineCursor
+						if lo > hi {
+							lo, hi = hi, lo
+						}
+					}
+					m.branchContext = strings.Join(lines[lo:hi+1], "\n")
+					m.selecting = false
+					m.lineSelect = false
+					m.selectIdx = -1
+					m.lineCursor = 0
+					m.lineAnchor = -1
+					(&m).refreshSelectView()
+					if m.confirming {
+						m.confirming = false
+						m.confirmResponseCh <- false
+					}
+					if !m.branchOpen {
+						m.branchOpen = true
+						m.branchFocused = true
+						m.branchHistory = append([]agent.Turn{}, m.mainHistory...)
+						m.resizeViewports()
+					} else {
+						m.branchFocused = true
+					}
+				case "escape":
+					m.lineSelect = false
+					m.lineCursor = 0
+					m.lineAnchor = -1
+					(&m).refreshSelectView()
+				}
+				return m, nil
+			}
+
+			// Message-select mode
+			switch msg.String() {
+			case "up":
+				idx := m.selectIdx - 1
+				for idx >= 0 && msgs[idx].kind == msgKindAction {
+					idx--
+				}
+				if idx >= 0 {
+					m.selectIdx = idx
+					(&m).refreshSelectView()
+				}
+			case "down":
+				idx := m.selectIdx + 1
+				for idx < len(msgs) && msgs[idx].kind == msgKindAction {
+					idx++
+				}
+				if idx < len(msgs) {
+					m.selectIdx = idx
+					(&m).refreshSelectView()
+				}
+			case "enter":
+				// Enter line-select mode for this message
+				if m.selectIdx >= 0 && m.selectIdx < len(msgs) {
+					m.lineSelect = true
+					m.lineCursor = 0
+					m.lineAnchor = -1
+					(&m).refreshSelectView()
+				}
+			case "escape", "v":
+				m.selecting = false
+				m.lineSelect = false
+				m.selectIdx = -1
+				m.lineCursor = 0
+				m.lineAnchor = -1
+				(&m).refreshSelectView()
+			}
+			return m, nil
+		}
+
 		if m.confirming {
 			switch msg.String() {
 			case "y":
@@ -336,45 +537,128 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.confirming = false
 				m.confirmResponseCh <- false
 				return m, waitForConfirm(m.confirmMsgCh)
+			case "v":
+				if idx := lastSelectableIdx(m.mainMsgs); idx >= 0 {
+					m.selecting = true
+					m.selectingBranch = false
+					m.selectIdx = idx
+					(&m).refreshSelectView()
+				}
 			}
 			return m, nil
 		}
+		if m.closingBranch {
+			switch msg.String() {
+			case "y":
+				m.closingBranch = false
+				m.branchOpen = false
+				m.branchFocused = false
+				m.branchHistory = nil
+				m.branchMsgs = []renderMsg{}
+				m.resizeViewports()
+			case "n", "escape":
+				m.closingBranch = false
+			}
+			return m, nil
+		}
+
 		if m.loading {
 			return m, nil
 		}
 		switch msg.String() {
+		case "v":
+			msgs := m.mainMsgs
+			isBranch := m.branchOpen && m.branchFocused
+			if isBranch {
+				msgs = m.branchMsgs
+			}
+			if idx := lastSelectableIdx(msgs); idx >= 0 {
+				m.selecting = true
+				m.selectingBranch = isBranch
+				m.selectIdx = idx
+				(&m).refreshSelectView()
+			}
+			return m, nil
+		case "up":
+			if len(m.inputHistory) > 0 && m.ta.Line() == 0 {
+				if m.historyIdx == -1 {
+					m.historyDraft = m.ta.Value()
+					m.historyIdx = len(m.inputHistory) - 1
+				} else if m.historyIdx > 0 {
+					m.historyIdx--
+				}
+				m.ta.SetValue(m.inputHistory[m.historyIdx])
+				return m, nil
+			}
+		case "down":
+			if m.historyIdx != -1 {
+				if m.historyIdx < len(m.inputHistory)-1 {
+					m.historyIdx++
+					m.ta.SetValue(m.inputHistory[m.historyIdx])
+				} else {
+					m.historyIdx = -1
+					m.ta.SetValue(m.historyDraft)
+					m.historyDraft = ""
+				}
+				return m, nil
+			}
 		case "enter":
 			input := strings.TrimSpace(m.ta.Value())
 			if input == "" {
 				return m, nil
 			}
 			m.ta.Reset()
+			m.inputHistory = append(m.inputHistory, input)
+			m.historyIdx = -1
+			m.historyDraft = ""
 
-			if strings.HasPrefix(input, "/branch ") {
-				question := strings.TrimPrefix(input, "/branch ")
+			// Route to branch if: explicit /branch prefix, or branch pane is focused
+			isBranchMsg := strings.HasPrefix(input, "/branch ") || (m.branchOpen && m.branchFocused)
+
+			if isBranchMsg {
+				// Resolve the user-visible question (strip /branch prefix if present)
+				displayQ := input
+				if strings.HasPrefix(input, "/branch ") {
+					displayQ = strings.TrimPrefix(input, "/branch ")
+				}
+				// Build agent message — prepend selection context if set
+				agentQ := displayQ
+				if m.branchContext != "" {
+					agentQ = "Regarding:\n\n" + m.branchContext + "\n\n" + displayQ
+					m.branchContext = ""
+					(&m).resizeViewports()
+				}
 				if !m.branchOpen {
 					m.branchOpen = true
 					m.branchFocused = true
-					// Seed branch with main context
 					m.branchHistory = append([]agent.Turn{}, m.mainHistory...)
 					m.resizeViewports()
 				}
+				m.branchMsgs = append(m.branchMsgs, renderMsg{kind: msgKindUser, content: displayQ})
+				m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width, -1, nil))
+				m.branchVP.GotoBottom()
 				m.loading = true
+				m.loadingBranch = true
 				m.toolCh = make(chan string, 10)
 				history := m.branchHistory
 				ag := m.ag
 				toolCh := m.toolCh
+				q := agentQ
 				return m, tea.Batch(
 					waitForTool(toolCh),
 					func() tea.Msg {
-						aiText, newHistory, err := ag.Run(history, question, func(msg string) { toolCh <- msg }, nil)
+						aiText, newHistory, err := ag.Run(history, q, func(msg string) { toolCh <- msg }, nil)
 						close(toolCh)
-						return sendDoneMsg{userMsg: question, aiMsg: aiText, history: newHistory, isBranch: true, err: err}
+						return sendDoneMsg{userMsg: displayQ, aiMsg: aiText, history: newHistory, isBranch: true, err: err}
 					},
 				)
 			}
 
+			m.mainMsgs = append(m.mainMsgs, renderMsg{kind: msgKindUser, content: input})
+			m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width, -1, nil))
+			m.mainVP.GotoBottom()
 			m.loading = true
+			m.loadingBranch = false
 			m.toolCh = make(chan string, 10)
 			m.confirmMsgCh = make(chan confirmRequestMsg, 1)
 			m.confirmResponseCh = make(chan bool, 1)
@@ -405,11 +689,16 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "ctrl+w":
-			m.branchOpen = false
-			m.branchFocused = false
-			m.branchHistory = nil
-			m.branchMsgs = []renderMsg{}
-			m.resizeViewports()
+			if m.branchOpen {
+				if len(m.branchMsgs) > 0 {
+					m.closingBranch = true
+				} else {
+					m.branchOpen = false
+					m.branchFocused = false
+					m.branchHistory = nil
+					m.resizeViewports()
+				}
+			}
 			return m, nil
 		}
 	}
@@ -438,6 +727,9 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) resizeViewports() {
 	headerH := 1
 	inputH := 4
+	if m.branchContext != "" {
+		inputH++ // quoting bar adds one line above the textarea
+	}
 	bodyH := m.height - headerH - inputH
 	if bodyH < 1 {
 		bodyH = 1
@@ -445,16 +737,54 @@ func (m *Model) resizeViewports() {
 
 	if m.branchOpen {
 		mainW := m.width/2 - 1
+		if mainW < 20 {
+			mainW = 20
+		}
 		branchW := m.width - mainW - 1
+		if branchW < 20 {
+			branchW = 20
+		}
 		m.mainVP = viewport.New(mainW, bodyH)
-		m.mainVP.SetContent(renderMessages(m.mainMsgs, mainW))
+		m.mainVP.SetContent(renderMessages(m.mainMsgs, mainW, -1, nil))
 		m.branchVP = viewport.New(branchW, bodyH)
-		m.branchVP.SetContent(renderMessages(m.branchMsgs, branchW))
+		m.branchVP.SetContent(renderMessages(m.branchMsgs, branchW, -1, nil))
 	} else {
-		m.mainVP = viewport.New(m.width, bodyH)
-		m.mainVP.SetContent(renderMessages(m.mainMsgs, m.width))
+		w := m.width
+		if w < 20 {
+			w = 20
+		}
+		m.mainVP = viewport.New(w, bodyH)
+		m.mainVP.SetContent(renderMessages(m.mainMsgs, w, -1, nil))
 	}
 	m.ta.SetWidth(m.width - 2)
+}
+
+// lastSelectableIdx returns the index of the last non-action message, or -1.
+func lastSelectableIdx(msgs []renderMsg) int {
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].kind != msgKindAction {
+			return i
+		}
+	}
+	return -1
+}
+
+func (m Model) activeLineSelect() *lineSelectInfo {
+	if !m.lineSelect {
+		return nil
+	}
+	return &lineSelectInfo{msgIdx: m.selectIdx, cursor: m.lineCursor, anchor: m.lineAnchor}
+}
+
+// refreshSelectView re-renders the active pane viewport with the current
+// selection highlighted. Must be called on an addressable Model.
+func (m *Model) refreshSelectView() {
+	ls := m.activeLineSelect()
+	if m.selectingBranch {
+		m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width, m.selectIdx, ls))
+	} else {
+		m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width, m.selectIdx, ls))
+	}
 }
 
 // ── Views ─────────────────────────────────────────────────────────────────────
@@ -499,7 +829,11 @@ func (m Model) chatView() string {
 	var header string
 	if m.branchOpen {
 		mainH := headerStyle.Render("── main")
-		branchH := branchHeaderStyle.Render("── branch")
+		branchLabel := "── branch"
+		if len(m.branchMsgs) == 0 {
+			branchLabel += hintStyle.Render("  seeded from main")
+		}
+		branchH := branchHeaderStyle.Render(branchLabel)
 		gap := m.width/2 - lipgloss.Width(mainH) - 1
 		if gap < 1 {
 			gap = 1
@@ -507,6 +841,14 @@ func (m Model) chatView() string {
 		header = mainH + strings.Repeat(" ", gap) + branchH
 	} else {
 		header = headerStyle.Render("── Tangent")
+	}
+
+	if m.selecting {
+		modeStr := "SELECT"
+		if m.lineSelect {
+			modeStr = "LINE SELECT"
+		}
+		header += selectedStyle.Render("  ·  " + modeStr)
 	}
 
 	var body string
@@ -519,23 +861,53 @@ func (m Model) chatView() string {
 		body = m.mainVP.View()
 	}
 
-	hint := "enter · send   /branch <question> · open branch   tab · switch pane   ctrl+w · close branch   ctrl+c · quit"
-	if m.confirming {
-		hint = "  " + m.confirmMsg + "   y · confirm   n · deny"
-	} else if m.loading {
+	var hint string
+	switch {
+	case m.err != "":
+		hint = m.err
+	case m.lineSelect:
+		msgs := m.mainMsgs
+		if m.selectingBranch {
+			msgs = m.branchMsgs
+		}
+		totalLines := 0
+		if m.selectIdx >= 0 && m.selectIdx < len(msgs) {
+			totalLines = len(strings.Split(strings.TrimRight(msgs[m.selectIdx].content, "\n"), "\n"))
+		}
+		linePos := fmt.Sprintf("line %d/%d", m.lineCursor+1, totalLines)
+		if m.lineAnchor >= 0 {
+			lo, hi := m.lineAnchor, m.lineCursor
+			if lo > hi {
+				lo, hi = hi, lo
+			}
+			linePos += fmt.Sprintf("  ·  %d lines selected", hi-lo+1)
+		}
+		hint = linePos + "   space · anchor   enter · branch   esc · back"
+	case m.selecting:
+		hint = "↑↓ · navigate   enter · select lines   escape · cancel"
+	case m.confirming:
+		hint = "  " + m.confirmMsg + "   y · confirm   n · deny   v · select & branch"
+	case m.closingBranch:
+		hint = "close branch and discard conversation?   y · yes   n · cancel"
+	case m.loading:
 		if m.toolMsg != "" {
 			hint = "  " + m.toolMsg + "..."
 		} else {
 			hint = "  thinking..."
 		}
-	}
-	if m.err != "" {
-		hint = m.err
+	case m.branchOpen:
+		hint = "enter · send   tab · switch pane   v · select   ctrl+w · close branch   ↑↓ · history   ctrl+c · quit"
+	default:
+		hint = "enter · send   /branch <question> · open branch   v · select   ↑↓ · history   ctrl+c · quit"
 	}
 
 	parts := []string{header, body}
-	if m.confirming && m.confirmPreview != "" {
-		parts = append(parts, previewStyle.Render(renderDiff(m.confirmPreview)))
+	if m.branchContext != "" {
+		preview := strings.ReplaceAll(m.branchContext, "\n", " ")
+		if len(preview) > 72 {
+			preview = preview[:69] + "..."
+		}
+		parts = append(parts, hintStyle.Render("  ╌ quoting: "+preview))
 	}
 	parts = append(parts, m.ta.View(), hintStyle.Render(hint))
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
@@ -560,25 +932,151 @@ func renderDiff(diff string) string {
 	return b.String()
 }
 
-func renderMessages(msgs []renderMsg, width int) string {
+func renderMessages(msgs []renderMsg, width, selectedIdx int, ls *lineSelectInfo) string {
 	if width < 20 {
 		width = 20
 	}
+	selectMode := selectedIdx >= 0
 	var b strings.Builder
-	for _, msg := range msgs {
-		prefix := "     ai: "
-		style := aiStyle
-		if msg.role == "user" {
-			prefix = "    you: "
-			style = userStyle
+	for i, msg := range msgs {
+		sel := i == selectedIdx
+		dim := selectMode && !sel
+		// When in line-select mode for this message, render line-by-line
+		if ls != nil && i == ls.msgIdx {
+			b.WriteString(renderLineSelect(msg, width, ls))
+			continue
 		}
-		indent := strings.Repeat(" ", len(prefix))
-		lineW := width - len(prefix)
-		if lineW < 10 {
-			lineW = 10
+		selStyle := selectedStyle.UnsetBackground()
+		switch msg.kind {
+		case msgKindUser:
+			b.WriteString("\n")
+			switch {
+			case sel:
+				b.WriteString(wrapText(msg.content, selStyle, "    ▶ ", "      ", width-6))
+			case dim:
+				b.WriteString(wrapText(msg.content, hintStyle, "  ▸ ", "    ", width-4))
+			default:
+				b.WriteString(wrapText(msg.content, userMsgStyle, "  ▸ ", "    ", width-4))
+			}
+			b.WriteString("\n")
+		case msgKindAction:
+			b.WriteString(actionMsgStyle.Render("  · "+msg.content) + "\n")
+		case msgKindChat:
+			switch {
+			case sel:
+				b.WriteString(wrapText(msg.content, selStyle, "    ", "    ", width-4))
+				b.WriteString("\n")
+			case dim:
+				b.WriteString(wrapText(msg.content, hintStyle, "  ", "  ", width-2))
+				b.WriteString("\n")
+			default:
+				b.WriteString(wrapText(msg.content, chatMsgStyle, "  ", "  ", width-2))
+				b.WriteString("\n")
+			}
+		case msgKindCode:
+			style := codeMsgStyle
+			var prefix string
+			var inner int
+			switch {
+			case sel:
+				style = style.BorderForeground(colorSelect).Foreground(colorSelect)
+				prefix = "    "
+				inner = width - 8
+			case dim:
+				style = style.BorderForeground(colorDim).Foreground(colorDim)
+				prefix = "  "
+				inner = width - 6
+			default:
+				prefix = "  "
+				inner = width - 6
+			}
+			if inner < 10 {
+				inner = 10
+			}
+			b.WriteString(prefix + style.Width(inner).Render(msg.content) + "\n\n")
+		case msgKindDiff:
+			style := previewStyle
+			var prefix string
+			switch {
+			case sel:
+				style = style.BorderForeground(colorSelect)
+				prefix = "  "
+			case dim:
+				style = style.BorderForeground(colorDim)
+			}
+			b.WriteString(prefix + style.Render(strings.TrimRight(renderDiff(msg.content), "\n")) + "\n\n")
 		}
+	}
+	return b.String()
+}
 
-		words := strings.Fields(msg.content)
+func renderLineSelect(msg renderMsg, width int, ls *lineSelectInfo) string {
+	lines := strings.Split(strings.TrimRight(msg.content, "\n"), "\n")
+	lo, hi := ls.cursor, ls.cursor
+	if ls.anchor >= 0 {
+		lo, hi = ls.anchor, ls.cursor
+		if lo > hi {
+			lo, hi = hi, lo
+		}
+	}
+
+	var inner strings.Builder
+	for i, line := range lines {
+		inRange := i >= lo && i <= hi
+		isCursor := i == ls.cursor
+		switch {
+		case isCursor:
+			inner.WriteString(selectedStyle.Render("▶ "+line) + "\n")
+		case inRange:
+			inner.WriteString(lineRangeStyle.Render("  "+line) + "\n")
+		default:
+			switch msg.kind {
+			case msgKindCode:
+				inner.WriteString(codeLineStyle.Render("  "+line) + "\n")
+			case msgKindDiff:
+				switch {
+				case strings.HasPrefix(line, "+"):
+					inner.WriteString(diffAddStyle.Render("  "+line) + "\n")
+				case strings.HasPrefix(line, "-"):
+					inner.WriteString(diffRemoveStyle.Render("  "+line) + "\n")
+				case strings.HasPrefix(line, "@@"):
+					inner.WriteString(diffHunkStyle.Render("  "+line) + "\n")
+				default:
+					inner.WriteString(diffDefaultStyle.Render("  "+line) + "\n")
+				}
+			default:
+				inner.WriteString(chatMsgStyle.Render("  "+line) + "\n")
+			}
+		}
+	}
+	content := strings.TrimRight(inner.String(), "\n")
+
+	var b strings.Builder
+	switch msg.kind {
+	case msgKindCode:
+		innerW := width - 6
+		if innerW < 10 {
+			innerW = 10
+		}
+		b.WriteString("  " + codeMsgStyle.BorderForeground(colorSelect).Width(innerW).Render(content) + "\n\n")
+	case msgKindDiff:
+		b.WriteString(previewStyle.BorderForeground(colorSelect).Render(content) + "\n\n")
+	default:
+		b.WriteString("\n" + selectBarStyle.Render(content) + "\n\n")
+	}
+	return b.String()
+}
+
+func wrapText(content string, style lipgloss.Style, prefix, indent string, lineW int) string {
+	if lineW < 10 {
+		lineW = 10
+	}
+	var b strings.Builder
+	for pi, para := range strings.Split(content, "\n\n") {
+		if pi > 0 {
+			b.WriteString("\n")
+		}
+		words := strings.Fields(para)
 		line := ""
 		firstLine := true
 		for _, w := range words {
@@ -603,7 +1101,29 @@ func renderMessages(msgs []renderMsg, width int) string {
 				b.WriteString(indent + line + "\n")
 			}
 		}
-		b.WriteString("\n")
 	}
 	return b.String()
+}
+
+func parseAIResponse(text string) []renderMsg {
+	var msgs []renderMsg
+	parts := strings.Split(text, "```")
+	for i, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		if i%2 == 1 {
+			// Inside a code fence — strip the language identifier line
+			if idx := strings.Index(part, "\n"); idx != -1 {
+				part = strings.TrimSpace(part[idx+1:])
+			}
+			if part != "" {
+				msgs = append(msgs, renderMsg{kind: msgKindCode, content: part})
+			}
+		} else {
+			msgs = append(msgs, renderMsg{kind: msgKindChat, content: part})
+		}
+	}
+	return msgs
 }
