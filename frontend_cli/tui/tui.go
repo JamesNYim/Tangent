@@ -848,7 +848,7 @@ func (m Model) chatView() string {
 		if m.lineSelect {
 			modeStr = "LINE SELECT"
 		}
-		header += selectedStyle.Render("  ·  " + modeStr)
+		header += selectedStyle.UnsetBackground().Render("  ·  " + modeStr)
 	}
 
 	var body string
@@ -975,36 +975,29 @@ func renderMessages(msgs []renderMsg, width, selectedIdx int, ls *lineSelectInfo
 			}
 		case msgKindCode:
 			style := codeMsgStyle
-			var prefix string
-			var inner int
+			inner := width - 6
 			switch {
 			case sel:
-				style = style.BorderForeground(colorSelect).Foreground(colorSelect)
-				prefix = "    "
+				style = style.BorderForeground(colorSelect).Foreground(colorSelect).MarginLeft(4)
 				inner = width - 8
 			case dim:
-				style = style.BorderForeground(colorDim).Foreground(colorDim)
-				prefix = "  "
-				inner = width - 6
+				style = style.BorderForeground(colorDim).Foreground(colorDim).MarginLeft(2)
 			default:
-				prefix = "  "
-				inner = width - 6
+				style = style.MarginLeft(2)
 			}
 			if inner < 10 {
 				inner = 10
 			}
-			b.WriteString(prefix + style.Width(inner).Render(msg.content) + "\n\n")
+			b.WriteString(style.Width(inner).Render(msg.content) + "\n\n")
 		case msgKindDiff:
 			style := previewStyle
-			var prefix string
 			switch {
 			case sel:
-				style = style.BorderForeground(colorSelect)
-				prefix = "  "
+				style = style.BorderForeground(colorSelect).MarginLeft(2)
 			case dim:
 				style = style.BorderForeground(colorDim)
 			}
-			b.WriteString(prefix + style.Render(strings.TrimRight(renderDiff(msg.content), "\n")) + "\n\n")
+			b.WriteString(style.Render(strings.TrimRight(renderDiff(msg.content), "\n")) + "\n\n")
 		}
 	}
 	return b.String()
