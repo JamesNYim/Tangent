@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -36,12 +35,16 @@ var (
 
 var (
 	headerStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#d7875f")).
-			Bold(true)
+			Foreground(lipgloss.Color("#06610f")).
+			Background(lipgloss.Color("#49a352")).
+			Bold(true).
+			Padding(0, 1)
 
 	branchHeaderStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#d7875f")).
-				Bold(true)
+				Foreground(lipgloss.Color("#06610f")).
+				Background(lipgloss.Color("#49a352")).
+				Bold(true).
+				Padding(0, 1)
 
 	userMsgStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#ffffff")).
@@ -202,14 +205,9 @@ type Model struct {
 	confirmMsgCh      chan confirmRequestMsg
 	confirmResponseCh chan bool
 
-	ta            textarea.Model
+	input         inputBar
 	toolCh        chan string
 	loadingBranch bool
-
-	// input history (↑/↓ to cycle)
-	inputHistory []string
-	historyIdx   int
-	historyDraft string
 
 	// branch close confirmation
 	closingBranch bool
@@ -232,17 +230,9 @@ func New() Model {
 	keyInput.EchoMode = textinput.EchoPassword
 	keyInput.EchoCharacter = '•'
 
-	ta := textarea.New()
-	ta.Placeholder = "Type a message..."
-	ta.Focus()
-	ta.CharLimit = 0
-	ta.SetHeight(3)
-	ta.ShowLineNumbers = false
-
 	m := Model{
 		setupInput: keyInput,
-		ta:         ta,
-		historyIdx: -1,
+		input:      newInputBar(),
 		selectIdx:  -1,
 		lineAnchor: -1,
 	}
@@ -580,115 +570,6 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 				(&m).refreshSelectView()
 			}
 			return m, nil
-		case "up":
-			if len(m.inputHistory) > 0 && m.ta.Line() == 0 {
-				if m.historyIdx == -1 {
-					m.historyDraft = m.ta.Value()
-					m.historyIdx = len(m.inputHistory) - 1
-				} else if m.historyIdx > 0 {
-					m.historyIdx--
-				}
-				m.ta.SetValue(m.inputHistory[m.historyIdx])
-				return m, nil
-			}
-		case "down":
-			if m.historyIdx != -1 {
-				if m.historyIdx < len(m.inputHistory)-1 {
-					m.historyIdx++
-					m.ta.SetValue(m.inputHistory[m.historyIdx])
-				} else {
-					m.historyIdx = -1
-					m.ta.SetValue(m.historyDraft)
-					m.historyDraft = ""
-				}
-				return m, nil
-			}
-		case "enter":
-			input := strings.TrimSpace(m.ta.Value())
-			if input == "" {
-				return m, nil
-			}
-			m.ta.Reset()
-			m.inputHistory = append(m.inputHistory, input)
-			m.historyIdx = -1
-			m.historyDraft = ""
-
-			// Route to branch if: explicit /branch prefix, or branch pane is focused
-			isBranchMsg := strings.HasPrefix(input, "/branch ") || (m.branchOpen && m.branchFocused)
-
-			if isBranchMsg {
-				// Resolve the user-visible question (strip /branch prefix if present)
-				displayQ := input
-				if strings.HasPrefix(input, "/branch ") {
-					displayQ = strings.TrimPrefix(input, "/branch ")
-				}
-				// Build agent message — prepend selection context if set
-				agentQ := displayQ
-				if m.branchContext != "" {
-					agentQ = "Regarding:\n\n" + m.branchContext + "\n\n" + displayQ
-					if !m.branchOpen {
-						m.branchOpen = true
-						m.branchFocused = true
-						m.branchHistory = append([]agent.Turn{}, m.mainHistory...)
-						m.resizeViewports()
-					}
-					m.branchMsgs = append(m.branchMsgs, renderMsg{kind: msgKindQuote, content: m.branchContext})
-					m.branchContext = ""
-					(&m).resizeViewports()
-				}
-				if !m.branchOpen {
-					m.branchOpen = true
-					m.branchFocused = true
-					m.branchHistory = append([]agent.Turn{}, m.mainHistory...)
-					m.resizeViewports()
-				}
-				m.branchMsgs = append(m.branchMsgs, renderMsg{kind: msgKindUser, content: displayQ})
-				m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width, -1, nil))
-				m.branchVP.GotoBottom()
-				m.loading = true
-				m.loadingBranch = true
-				m.toolCh = make(chan string, 10)
-				history := m.branchHistory
-				ag := m.ag
-				toolCh := m.toolCh
-				q := agentQ
-				return m, tea.Batch(
-					waitForTool(toolCh),
-					func() tea.Msg {
-						aiText, newHistory, err := ag.Run(history, q, func(msg string) { toolCh <- msg }, nil)
-						close(toolCh)
-						return sendDoneMsg{userMsg: displayQ, aiMsg: aiText, history: newHistory, isBranch: true, err: err}
-					},
-				)
-			}
-
-			m.mainMsgs = append(m.mainMsgs, renderMsg{kind: msgKindUser, content: input})
-			m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width, -1, nil))
-			m.mainVP.GotoBottom()
-			m.loading = true
-			m.loadingBranch = false
-			m.toolCh = make(chan string, 10)
-			m.confirmMsgCh = make(chan confirmRequestMsg, 1)
-			m.confirmResponseCh = make(chan bool, 1)
-			history := m.mainHistory
-			ag := m.ag
-			toolCh := m.toolCh
-			confirmMsgCh := m.confirmMsgCh
-			confirmResponseCh := m.confirmResponseCh
-			confirmFn := agent.ConfirmFn(func(name, msg, preview string) bool {
-				confirmMsgCh <- confirmRequestMsg{msg: msg, preview: preview}
-				return <-confirmResponseCh
-			})
-			return m, tea.Batch(
-				waitForTool(toolCh),
-				waitForConfirm(confirmMsgCh),
-				func() tea.Msg {
-					aiText, newHistory, err := ag.Run(history, input, func(msg string) { toolCh <- msg }, confirmFn)
-					close(toolCh)
-					close(confirmMsgCh)
-					return sendDoneMsg{userMsg: input, aiMsg: aiText, history: newHistory, isBranch: false, err: err}
-				},
-			)
 
 		case "tab":
 			if m.branchOpen {
@@ -708,25 +589,118 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 			return m, nil
+
+		default:
+			submitted, handled, inputCmd := m.input.Update(msg)
+			if handled && submitted == "" {
+				// up/down history or empty enter — input bar consumed the key
+				return m, inputCmd
+			}
+			if handled {
+				// user pressed enter with content
+				input := submitted
+
+				// Route to branch if: explicit /branch prefix, or branch pane is focused
+				isBranchMsg := strings.HasPrefix(input, "/branch ") || (m.branchOpen && m.branchFocused)
+
+				if isBranchMsg {
+					// Resolve the user-visible question (strip /branch prefix if present)
+					displayQ := input
+					if strings.HasPrefix(input, "/branch ") {
+						displayQ = strings.TrimPrefix(input, "/branch ")
+					}
+					// Build agent message — prepend selection context if set
+					agentQ := displayQ
+					if m.branchContext != "" {
+						agentQ = "Regarding:\n\n" + m.branchContext + "\n\n" + displayQ
+						if !m.branchOpen {
+							m.branchOpen = true
+							m.branchFocused = true
+							m.branchHistory = append([]agent.Turn{}, m.mainHistory...)
+							m.resizeViewports()
+						}
+						m.branchMsgs = append(m.branchMsgs, renderMsg{kind: msgKindQuote, content: m.branchContext})
+						m.branchContext = ""
+						(&m).resizeViewports()
+					}
+					if !m.branchOpen {
+						m.branchOpen = true
+						m.branchFocused = true
+						m.branchHistory = append([]agent.Turn{}, m.mainHistory...)
+						m.resizeViewports()
+					}
+					m.branchMsgs = append(m.branchMsgs, renderMsg{kind: msgKindUser, content: displayQ})
+					m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width, -1, nil))
+					m.branchVP.GotoBottom()
+					m.loading = true
+					m.loadingBranch = true
+					m.toolCh = make(chan string, 10)
+					branchHistory := m.branchHistory
+					agentRunner := m.ag
+					branchToolCh := m.toolCh
+					agentQuestion := agentQ
+					return m, tea.Batch(
+						waitForTool(branchToolCh),
+						func() tea.Msg {
+							aiText, newHistory, err := agentRunner.Run(branchHistory, agentQuestion, func(toolMsg string) { branchToolCh <- toolMsg }, nil)
+							close(branchToolCh)
+							return sendDoneMsg{userMsg: displayQ, aiMsg: aiText, history: newHistory, isBranch: true, err: err}
+						},
+					)
+				}
+
+				m.mainMsgs = append(m.mainMsgs, renderMsg{kind: msgKindUser, content: input})
+				m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width, -1, nil))
+				m.mainVP.GotoBottom()
+				m.loading = true
+				m.loadingBranch = false
+				m.toolCh = make(chan string, 10)
+				m.confirmMsgCh = make(chan confirmRequestMsg, 1)
+				m.confirmResponseCh = make(chan bool, 1)
+				mainHistory := m.mainHistory
+				agentRunner := m.ag
+				mainToolCh := m.toolCh
+				mainConfirmMsgCh := m.confirmMsgCh
+				mainConfirmResponseCh := m.confirmResponseCh
+				confirmFn := agent.ConfirmFn(func(name, confirmMsg, preview string) bool {
+					mainConfirmMsgCh <- confirmRequestMsg{msg: confirmMsg, preview: preview}
+					return <-mainConfirmResponseCh
+				})
+				return m, tea.Batch(
+					waitForTool(mainToolCh),
+					waitForConfirm(mainConfirmMsgCh),
+					func() tea.Msg {
+						aiText, newHistory, err := agentRunner.Run(mainHistory, input, func(toolMsg string) { mainToolCh <- toolMsg }, confirmFn)
+						close(mainToolCh)
+						close(mainConfirmMsgCh)
+						return sendDoneMsg{userMsg: input, aiMsg: aiText, history: newHistory, isBranch: false, err: err}
+					},
+				)
+			}
+			// key was forwarded to textarea inside inputBar.Update — carry its cmd
+			var cmds []tea.Cmd
+			if inputCmd != nil {
+				cmds = append(cmds, inputCmd)
+			}
+			var viewportCmd tea.Cmd
+			m.mainVP, viewportCmd = m.mainVP.Update(msg)
+			cmds = append(cmds, viewportCmd)
+			if m.branchOpen {
+				m.branchVP, viewportCmd = m.branchVP.Update(msg)
+				cmds = append(cmds, viewportCmd)
+			}
+			return m, tea.Batch(cmds...)
 		}
 	}
 
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
-
-	if key, ok := msg.(tea.KeyMsg); !ok || key.String() != "enter" {
-		m.ta, cmd = m.ta.Update(msg)
-		cmds = append(cmds, cmd)
-	}
-
 	m.mainVP, cmd = m.mainVP.Update(msg)
 	cmds = append(cmds, cmd)
-
 	if m.branchOpen {
 		m.branchVP, cmd = m.branchVP.Update(msg)
 		cmds = append(cmds, cmd)
 	}
-
 	return m, tea.Batch(cmds...)
 }
 
@@ -764,7 +738,7 @@ func (m *Model) resizeViewports() {
 		m.mainVP = viewport.New(w, bodyH)
 		m.mainVP.SetContent(renderMessages(m.mainMsgs, w, -1, nil))
 	}
-	m.ta.SetWidth(m.width - 2)
+	m.input.SetWidth(m.width)
 }
 
 // lastSelectableIdx returns the index of the last non-action message, or -1.
@@ -836,12 +810,18 @@ func (m Model) setupView() string {
 func (m Model) chatView() string {
 	var header string
 	if m.branchOpen {
-		mainH := headerStyle.Render("── main")
+		var mainH, branchH string
 		branchLabel := "── branch"
 		if len(m.branchMsgs) == 0 {
-			branchLabel += hintStyle.Render("  seeded from main")
+			branchLabel += "  seeded from main"
 		}
-		branchH := branchHeaderStyle.Render(branchLabel)
+		if m.branchFocused {
+			mainH = hintStyle.Render("── main")
+			branchH = branchHeaderStyle.Render(branchLabel)
+		} else {
+			mainH = headerStyle.Render("── main")
+			branchH = hintStyle.Render(branchLabel)
+		}
 		gap := m.width/2 - lipgloss.Width(mainH) - 1
 		if gap < 1 {
 			gap = 1
@@ -917,7 +897,7 @@ func (m Model) chatView() string {
 		}
 		parts = append(parts, hintStyle.Render("  ╌ quoting: "+preview))
 	}
-	parts = append(parts, m.ta.View(), hintStyle.Render(hint))
+	parts = append(parts, m.input.View(), hintStyle.Render(hint))
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
