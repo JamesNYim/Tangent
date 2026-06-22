@@ -56,15 +56,21 @@ type openaiToolDescr struct {
 	Parameters  interface{} `json:"parameters"`
 }
 
+type openaiUsage struct {
+	PromptTokens     int `json:"prompt_tokens"`
+	CompletionTokens int `json:"completion_tokens"`
+}
+
 type openaiResponse struct {
 	Choices []struct {
 		Message openaiMessage `json:"message"`
 	} `json:"choices"`
+	Usage openaiUsage `json:"usage"`
 }
 
 // ── Conversion ────────────────────────────────────────────────────────────────
 
-func (provider *OpenAIProvider) Complete(system string, history []Turn, tools []ToolDef) (string, []ToolCall, error) {
+func (provider *OpenAIProvider) Complete(system string, history []Turn, tools []ToolDef) (string, []ToolCall, int, int, error) {
 	msgs := []openaiMessage{{Role: "system", Content: system}}
 	for _, turn := range history {
 		expanded := turnToOpenAI(turn)
@@ -91,34 +97,34 @@ func (provider *OpenAIProvider) Complete(system string, history []Turn, tools []
 
 	body, err := json.Marshal(req)
 	if err != nil {
-		return "", nil, err
+		return "", nil, 0, 0, err
 	}
 
 	httpReq, err := http.NewRequest("POST", openaiAPI, bytes.NewReader(body))
 	if err != nil {
-		return "", nil, err
+		return "", nil, 0, 0, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Authorization", "Bearer "+provider.apiKey)
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
-		return "", nil, err
+		return "", nil, 0, 0, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		var errBody map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&errBody)
-		return "", nil, fmt.Errorf("openai HTTP %s: %v", resp.Status, errBody)
+		return "", nil, 0, 0, fmt.Errorf("openai HTTP %s: %v", resp.Status, errBody)
 	}
 
 	var result openaiResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", nil, err
+		return "", nil, 0, 0, err
 	}
 	if len(result.Choices) == 0 {
-		return "", nil, fmt.Errorf("openai: empty response")
+		return "", nil, 0, 0, fmt.Errorf("openai: empty response")
 	}
 
 	msg := result.Choices[0].Message
@@ -138,7 +144,7 @@ func (provider *OpenAIProvider) Complete(system string, history []Turn, tools []
 		}
 		calls = append(calls, ToolCall{ID: toolCall.ID, Name: toolCall.Function.Name, Input: input})
 	}
-	return text, calls, nil
+	return text, calls, result.Usage.PromptTokens, result.Usage.CompletionTokens, nil
 }
 
 // turnToOpenAI may expand one Turn into multiple messages (tool results require

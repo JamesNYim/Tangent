@@ -49,14 +49,20 @@ type anthropicTool struct {
 	InputSchema interface{} `json:"input_schema"`
 }
 
+type anthropicUsage struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
+}
+
 type anthropicResponse struct {
 	Content    []anthropicContent `json:"content"`
 	StopReason string             `json:"stop_reason"`
+	Usage      anthropicUsage     `json:"usage"`
 }
 
 // ── Conversion ────────────────────────────────────────────────────────────────
 
-func (provider *AnthropicProvider) Complete(system string, history []Turn, tools []ToolDef) (string, []ToolCall, error) {
+func (provider *AnthropicProvider) Complete(system string, history []Turn, tools []ToolDef) (string, []ToolCall, int, int, error) {
 	msgs := make([]anthropicMessage, 0, len(history))
 	for _, turn := range history {
 		msgs = append(msgs, turnToAnthropic(turn))
@@ -81,12 +87,12 @@ func (provider *AnthropicProvider) Complete(system string, history []Turn, tools
 
 	body, err := json.Marshal(req)
 	if err != nil {
-		return "", nil, err
+		return "", nil, 0, 0, err
 	}
 
 	httpReq, err := http.NewRequest("POST", anthropicAPI, bytes.NewReader(body))
 	if err != nil {
-		return "", nil, err
+		return "", nil, 0, 0, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("x-api-key", provider.apiKey)
@@ -94,19 +100,19 @@ func (provider *AnthropicProvider) Complete(system string, history []Turn, tools
 
 	resp, err := http.DefaultClient.Do(httpReq)
 	if err != nil {
-		return "", nil, err
+		return "", nil, 0, 0, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
 		var errBody map[string]interface{}
 		json.NewDecoder(resp.Body).Decode(&errBody)
-		return "", nil, fmt.Errorf("anthropic HTTP %s: %v", resp.Status, errBody)
+		return "", nil, 0, 0, fmt.Errorf("anthropic HTTP %s: %v", resp.Status, errBody)
 	}
 
 	var result anthropicResponse
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-		return "", nil, err
+		return "", nil, 0, 0, err
 	}
 
 	var text string
@@ -129,7 +135,7 @@ func (provider *AnthropicProvider) Complete(system string, history []Turn, tools
 			calls = append(calls, ToolCall{ID: content.ID, Name: content.Name, Input: input})
 		}
 	}
-	return text, calls, nil
+	return text, calls, result.Usage.InputTokens, result.Usage.OutputTokens, nil
 }
 
 func turnToAnthropic(turn Turn) anthropicMessage {

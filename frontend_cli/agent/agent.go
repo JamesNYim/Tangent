@@ -45,10 +45,10 @@ type ConfirmFn func(name, msg, preview string) bool
 // ── Provider interface ────────────────────────────────────────────────────────
 
 // Provider is implemented by each AI backend (Anthropic, OpenAI, etc.).
-// Complete sends the history and returns the assistant's text response
-// plus any tool calls it wants to make. The agent loop handles the rest.
+// Complete sends the history and returns the assistant's text response,
+// any tool calls it wants to make, and the token counts for the round-trip.
 type Provider interface {
-	Complete(system string, history []Turn, tools []ToolDef) (text string, calls []ToolCall, err error)
+	Complete(system string, history []Turn, tools []ToolDef) (text string, calls []ToolCall, inputTokens int, outputTokens int, err error)
 }
 
 // NewProvider creates the right Provider from a provider name and API key.
@@ -101,12 +101,16 @@ func (a *Agent) Run(history []Turn, userMsg string, onTool OnToolFn, confirm Con
 	history = append(history, Turn{Role: "user", Text: userMsg})
 
 	for {
-		text, calls, err := a.provider.Complete(a.systemPrompt(), history, fileTools)
+		text, calls, inputTokens, outputTokens, err := a.provider.Complete(a.systemPrompt(), history, fileTools)
 		if err != nil {
 			return "", history, err
 		}
 
 		history = append(history, Turn{Role: "assistant", Text: text, Calls: calls})
+
+		if onTool != nil && inputTokens > 0 {
+			onTool(fmt.Sprintf("%d in · %d out", inputTokens, outputTokens))
+		}
 
 		if len(calls) == 0 {
 			return text, history, nil
@@ -195,14 +199,19 @@ func formatToolMsg(name string, input map[string]string) string {
 		return "reading " + input["path"]
 	case "list_directory":
 		p := input["path"]
-		if p == "" {
-			p = "."
+		if p == "" || p == "." {
+			p = "./"
 		}
 		return "listing " + p
 	case "search_files":
-		return "searching: " + input["pattern"]
+		pattern := input["pattern"]
+		p := input["path"]
+		if p == "" || p == "." {
+			return `searching for "` + pattern + `"`
+		}
+		return `searching ` + p + ` for "` + pattern + `"`
 	case "run_command":
-		return "running: " + input["command"]
+		return "$ " + input["command"]
 	case "write_file":
 		return "writing " + input["path"]
 	default:
