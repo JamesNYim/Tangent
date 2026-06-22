@@ -53,14 +53,24 @@ func (bar *inputBar) Update(msg tea.Msg) (submitted string, handled bool, teaCmd
 	switch keyMsg.String() {
 	case "up":
 		if len(bar.history) > 0 && bar.textarea.Line() == 0 {
-			if bar.historyIdx == -1 {
+			// Navigate history only when there is typed content (entering history nav)
+			// or we are already inside history navigation (historyIdx >= 0).
+			// An empty textarea with no active navigation means the user is in read
+			// mode — let the key fall through so the viewport can scroll instead.
+			// Also fall through when already at the oldest entry (historyIdx == 0)
+			// so the user can keep scrolling past the beginning of their history.
+			if bar.historyIdx == -1 && bar.textarea.Value() != "" {
 				bar.historyDraft = bar.textarea.Value()
 				bar.historyIdx = len(bar.history) - 1
+				bar.textarea.SetValue(bar.history[bar.historyIdx])
+				return "", true, nil
 			} else if bar.historyIdx > 0 {
 				bar.historyIdx--
+				bar.textarea.SetValue(bar.history[bar.historyIdx])
+				return "", true, nil
 			}
-			bar.textarea.SetValue(bar.history[bar.historyIdx])
-			return "", true, nil
+			// historyIdx == -1 with empty textarea, or historyIdx == 0 (at oldest):
+			// fall through so the viewport receives the up key and scrolls.
 		}
 	case "down":
 		if bar.historyIdx != -1 {
@@ -74,6 +84,7 @@ func (bar *inputBar) Update(msg tea.Msg) (submitted string, handled bool, teaCmd
 			}
 			return "", true, nil
 		}
+		// historyIdx == -1: not navigating history — fall through so the viewport scrolls.
 	case "enter":
 		input := strings.TrimSpace(bar.textarea.Value())
 		if input == "" {

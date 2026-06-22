@@ -695,25 +695,27 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if inputCmd != nil {
 				cmds = append(cmds, inputCmd)
 			}
+			// Only the focused pane receives the key (e.g. up/down to scroll).
 			var viewportCmd tea.Cmd
-			m.mainVP, viewportCmd = m.mainVP.Update(msg)
-			cmds = append(cmds, viewportCmd)
-			if m.branchOpen {
+			if m.branchOpen && m.branchFocused {
 				m.branchVP, viewportCmd = m.branchVP.Update(msg)
-				cmds = append(cmds, viewportCmd)
+			} else {
+				m.mainVP, viewportCmd = m.mainVP.Update(msg)
 			}
+			cmds = append(cmds, viewportCmd)
 			return m, tea.Batch(cmds...)
 		}
 	}
 
+	// Non-key events (e.g. mouse wheel): route to the focused viewport only.
 	var cmds []tea.Cmd
-	var cmd tea.Cmd
-	m.mainVP, cmd = m.mainVP.Update(msg)
-	cmds = append(cmds, cmd)
-	if m.branchOpen {
-		m.branchVP, cmd = m.branchVP.Update(msg)
-		cmds = append(cmds, cmd)
+	var viewportCmd tea.Cmd
+	if m.branchOpen && m.branchFocused {
+		m.branchVP, viewportCmd = m.branchVP.Update(msg)
+	} else {
+		m.mainVP, viewportCmd = m.mainVP.Update(msg)
 	}
+	cmds = append(cmds, viewportCmd)
 	return m, tea.Batch(cmds...)
 }
 
