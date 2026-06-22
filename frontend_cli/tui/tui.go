@@ -472,6 +472,7 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.branchOpen = false
 					m.branchFocused = false
 					m.branchHistory = nil
+					m.branchContext = ""
 					m.resizeViewports()
 				}
 			}
@@ -514,13 +515,16 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 							lo, hi = hi, lo
 						}
 					}
-					m.branchContext = strings.Join(lines[lo:hi+1], "\n")
+					selectedText := strings.Join(lines[lo:hi+1], "\n")
+					// Capture lang before clearing selectIdx (used for quote highlighting)
+					quoteLang := msgs[m.selectIdx].lang
+					m.branchContext = selectedText
 					m.selecting = false
 					m.lineSelect = false
 					m.selectIdx = -1
 					m.lineCursor = 0
 					m.lineAnchor = -1
-					m.inputMode = modeNormal
+					m.inputMode = modeInsert
 					(&m).refreshSelectView()
 					if m.confirming {
 						m.confirming = false
@@ -534,6 +538,10 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 					} else {
 						m.branchFocused = true
 					}
+					m.branchMsgs = append(m.branchMsgs, renderMsg{kind: msgKindQuote, content: selectedText, lang: quoteLang})
+					m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width, -1, nil))
+					m.branchVP.GotoBottom()
+					return m, m.input.Focus()
 				case "esc":
 					m.lineSelect = false
 					m.lineCursor = 0
@@ -611,6 +619,7 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.branchFocused = false
 				m.branchHistory = nil
 				m.branchMsgs = []renderMsg{}
+				m.branchContext = ""
 				m.resizeViewports()
 			case "n", "esc":
 				m.closingBranch = false
@@ -680,15 +689,7 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 				agentQ := displayQ
 				if m.branchContext != "" {
 					agentQ = "Regarding:\n\n" + m.branchContext + "\n\n" + displayQ
-					if !m.branchOpen {
-						m.branchOpen = true
-						m.branchFocused = true
-						m.branchHistory = append([]agent.Turn{}, m.mainHistory...)
-						m.resizeViewports()
-					}
-					m.branchMsgs = append(m.branchMsgs, renderMsg{kind: msgKindQuote, content: m.branchContext})
 					m.branchContext = ""
-					(&m).resizeViewports()
 				}
 				if !m.branchOpen {
 					m.branchOpen = true
@@ -783,9 +784,6 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *Model) resizeViewports() {
 	headerH := 1
 	inputH := 4
-	if m.branchContext != "" {
-		inputH++ // quoting bar adds one line above the textarea
-	}
 	bodyH := m.height - headerH - inputH
 	if bodyH < 1 {
 		bodyH = 1
@@ -959,15 +957,7 @@ func (m Model) chatView() string {
 		hint = insertModeBadge.Render("INSERT") + hintStyle.Render("  enter · send   esc · normal   /branch · open branch   ↑↓ · history")
 	}
 
-	parts := []string{header, body}
-	if m.branchContext != "" {
-		preview := strings.ReplaceAll(m.branchContext, "\n", " ")
-		if len(preview) > 72 {
-			preview = preview[:69] + "..."
-		}
-		parts = append(parts, hintStyle.Render("  ╌ quoting: "+preview))
-	}
-	parts = append(parts, m.input.View(), hint)
+	parts := []string{header, body, m.input.View(), hint}
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
@@ -1087,8 +1077,14 @@ func renderMessages(msgs []renderMsg, width, selectedIdx int, ls *lineSelectInfo
 			b.WriteString(style.Render(strings.TrimRight(renderDiff(msg.content, msg.lang), "\n")) + "\n\n")
 		case msgKindQuote:
 			label := hintStyle.Render("  context")
-			content := selectBarStyle.Render(wrapText(msg.content, chatMsgStyle, "", "", width-4))
-			b.WriteString(label + "\n" + content + "\n")
+			var quoteBody string
+			if msg.lang != "" {
+				highlighted := highlightCode(msg.content, msg.lang)
+				quoteBody = selectBarStyle.Render(codeMsgStyle.BorderForeground(colorSelect).Width(width - 8).Render(highlighted))
+			} else {
+				quoteBody = selectBarStyle.Render(wrapText(msg.content, chatMsgStyle, "", "", width-4))
+			}
+			b.WriteString(label + "\n" + quoteBody + "\n")
 		}
 	}
 	return b.String()
