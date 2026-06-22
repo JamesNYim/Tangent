@@ -534,7 +534,7 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 					} else {
 						m.branchFocused = true
 					}
-				case "escape":
+				case "esc":
 					m.lineSelect = false
 					m.lineCursor = 0
 					m.lineAnchor = -1
@@ -571,7 +571,7 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.lineAnchor = -1
 					(&m).refreshSelectView()
 				}
-			case "escape", "v":
+			case "esc", "v":
 				m.selecting = false
 				m.lineSelect = false
 				m.selectIdx = -1
@@ -612,7 +612,7 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.branchHistory = nil
 				m.branchMsgs = []renderMsg{}
 				m.resizeViewports()
-			case "n", "escape":
+			case "n", "esc":
 				m.closingBranch = false
 			}
 			return m, nil
