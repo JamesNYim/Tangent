@@ -752,6 +752,10 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 				},
 			)
 		}
+		// In insert mode, swallow arrow keys — don't let them scroll the viewport.
+		if keyStr == "up" || keyStr == "down" {
+			return m, inputCmd
+		}
 		// key not handled by inputBar — pass to focused viewport
 		var cmds []tea.Cmd
 		if inputCmd != nil {
