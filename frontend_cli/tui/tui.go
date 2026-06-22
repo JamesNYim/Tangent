@@ -1055,32 +1055,69 @@ func renderLineSelect(msg renderMsg, width int, ls *lineSelectInfo) string {
 	}
 
 	var inner strings.Builder
-	for i, line := range displayLines {
+	for i := range rawLines {
+		rawLine := rawLines[i]
+		displayLine := displayLines[i]
 		inRange := i >= lo && i <= hi
 		isCursor := i == ls.cursor
+
+		if msg.kind == msgKindDiff {
+			// Split each diff line into its prefix sign and code content so we
+			// can color the +/- marker separately from the syntax-highlighted code.
+			var prefixChar string
+			var prefixStyle lipgloss.Style
+			var codeContent string
+			switch {
+			case strings.HasPrefix(rawLine, "+ "):
+				prefixChar, prefixStyle, codeContent = "+", diffAddStyle, rawLine[2:]
+			case rawLine == "+":
+				prefixChar, prefixStyle, codeContent = "+", diffAddStyle, ""
+			case strings.HasPrefix(rawLine, "- "):
+				prefixChar, prefixStyle, codeContent = "-", diffRemoveStyle, rawLine[2:]
+			case rawLine == "-":
+				prefixChar, prefixStyle, codeContent = "-", diffRemoveStyle, ""
+			case strings.HasPrefix(rawLine, "@@"):
+				prefixChar, prefixStyle, codeContent = "", diffHunkStyle, rawLine
+			default:
+				prefixChar, prefixStyle, codeContent = " ", diffDefaultStyle, strings.TrimPrefix(rawLine, " ")
+			}
+
+			highlighted := codeContent
+			if msg.lang != "" && codeContent != "" && prefixChar != "@@" {
+				highlighted = highlightCode(codeContent, msg.lang)
+			}
+
+			styledPrefix := prefixStyle.Render(prefixChar)
+			switch {
+			case isCursor:
+				inner.WriteString(selectedStyle.UnsetBackground().Render("▶") + " " + styledPrefix + " " + highlighted + "\n")
+			case inRange:
+				inner.WriteString(lineRangeStyle.UnsetBackground().Render("│") + " " + styledPrefix + " " + highlighted + "\n")
+			default:
+				inner.WriteString("  " + styledPrefix + " " + highlighted + "\n")
+			}
+			continue
+		}
+
 		switch {
 		case isCursor:
-			inner.WriteString(selectedStyle.Render("▶ "+line) + "\n")
+			if msg.kind == msgKindCode {
+				inner.WriteString(selectedStyle.UnsetBackground().Render("▶ ") + displayLine + "\n")
+			} else {
+				inner.WriteString(selectedStyle.Render("▶ "+displayLine) + "\n")
+			}
 		case inRange:
-			inner.WriteString(lineRangeStyle.Render("  "+line) + "\n")
+			if msg.kind == msgKindCode {
+				inner.WriteString(lineRangeStyle.UnsetBackground().Render("│ ") + displayLine + "\n")
+			} else {
+				inner.WriteString(lineRangeStyle.Render("  "+displayLine) + "\n")
+			}
 		default:
 			switch msg.kind {
 			case msgKindCode:
-				// line already has chroma ANSI colors — no additional style needed
-				inner.WriteString("  " + line + "\n")
-			case msgKindDiff:
-				switch {
-				case strings.HasPrefix(line, "+"):
-					inner.WriteString(diffAddStyle.Render("  "+line) + "\n")
-				case strings.HasPrefix(line, "-"):
-					inner.WriteString(diffRemoveStyle.Render("  "+line) + "\n")
-				case strings.HasPrefix(line, "@@"):
-					inner.WriteString(diffHunkStyle.Render("  "+line) + "\n")
-				default:
-					inner.WriteString(diffDefaultStyle.Render("  "+line) + "\n")
-				}
+				inner.WriteString("  " + displayLine + "\n")
 			default:
-				inner.WriteString(chatMsgStyle.Render("  "+line) + "\n")
+				inner.WriteString(chatMsgStyle.Render("  "+displayLine) + "\n")
 			}
 		}
 	}
