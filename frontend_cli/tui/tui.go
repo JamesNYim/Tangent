@@ -159,6 +159,7 @@ const (
 	msgKindChat                  // AI prose response
 	msgKindCode                  // code block / generated content
 	msgKindDiff                  // diff preview from a file write confirmation
+	msgKindQuote                 // selected context shown before a branch question
 )
 
 type renderMsg struct {
@@ -625,6 +626,13 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 				agentQ := displayQ
 				if m.branchContext != "" {
 					agentQ = "Regarding:\n\n" + m.branchContext + "\n\n" + displayQ
+					if !m.branchOpen {
+						m.branchOpen = true
+						m.branchFocused = true
+						m.branchHistory = append([]agent.Turn{}, m.mainHistory...)
+						m.resizeViewports()
+					}
+					m.branchMsgs = append(m.branchMsgs, renderMsg{kind: msgKindQuote, content: m.branchContext})
 					m.branchContext = ""
 					(&m).resizeViewports()
 				}
@@ -998,6 +1006,10 @@ func renderMessages(msgs []renderMsg, width, selectedIdx int, ls *lineSelectInfo
 				style = style.BorderForeground(colorDim)
 			}
 			b.WriteString(style.Render(strings.TrimRight(renderDiff(msg.content), "\n")) + "\n\n")
+		case msgKindQuote:
+			label := hintStyle.Render("  context")
+			content := selectBarStyle.Render(wrapText(msg.content, chatMsgStyle, "", "", width-4))
+			b.WriteString(label + "\n" + content + "\n")
 		}
 	}
 	return b.String()
