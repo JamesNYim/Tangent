@@ -18,25 +18,41 @@ type inputBar struct {
 func newInputBar() inputBar {
 	textArea := textarea.New()
 	textArea.Placeholder = "Type a message..."
-	textArea.Focus()
 	textArea.CharLimit = 0
 	textArea.SetHeight(1)
 	textArea.ShowLineNumbers = false
 
+	// INSERT mode: green border, visible cursor
 	textArea.FocusedStyle.Base = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#49a352")).
 		Padding(0, 1)
-
 	textArea.FocusedStyle.Placeholder = lipgloss.NewStyle().Foreground(lipgloss.Color("#878787"))
 	textArea.FocusedStyle.Text = lipgloss.NewStyle().Foreground(lipgloss.Color("#d7d7d7"))
 	textArea.FocusedStyle.Prompt = lipgloss.NewStyle().Foreground(lipgloss.Color("#49a352"))
 	textArea.FocusedStyle.CursorLine = lipgloss.NewStyle()
 
+	// NORMAL mode: dim border, no cursor
+	textArea.BlurredStyle.Base = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("#585858")).
+		Padding(0, 1)
+	textArea.BlurredStyle.Placeholder = lipgloss.NewStyle().Foreground(lipgloss.Color("#585858"))
+	textArea.BlurredStyle.Text = lipgloss.NewStyle().Foreground(lipgloss.Color("#878787"))
+	textArea.BlurredStyle.CursorLine = lipgloss.NewStyle()
+
 	return inputBar{
 		textarea:   textArea,
 		historyIdx: -1,
 	}
+}
+
+func (bar *inputBar) Focus() tea.Cmd {
+	return bar.textarea.Focus()
+}
+
+func (bar *inputBar) Blur() {
+	bar.textarea.Blur()
 }
 
 // Update handles key events for the input bar.

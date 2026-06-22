@@ -112,6 +112,31 @@ var (
 
 	codeLineStyle = lipgloss.NewStyle().
 			Foreground(diffAddStyle.GetForeground())
+
+	// Mode badge styles — rendered as a colored tag at the left of the hint bar.
+	normalModeBadge = lipgloss.NewStyle().
+			Background(lipgloss.Color("#585858")).
+			Foreground(lipgloss.Color("#ffffff")).
+			Bold(true).
+			Padding(0, 1)
+
+	insertModeBadge = lipgloss.NewStyle().
+			Background(lipgloss.Color("#49a352")).
+			Foreground(lipgloss.Color("#000000")).
+			Bold(true).
+			Padding(0, 1)
+
+	selectModeBadge = lipgloss.NewStyle().
+			Background(lipgloss.Color("#d78700")).
+			Foreground(lipgloss.Color("#000000")).
+			Bold(true).
+			Padding(0, 1)
+
+	confirmModeBadge = lipgloss.NewStyle().
+			Background(lipgloss.Color("#ff8787")).
+			Foreground(lipgloss.Color("#000000")).
+			Bold(true).
+			Padding(0, 1)
 )
 
 // ── Async message types ───────────────────────────────────────────────────────
@@ -168,6 +193,13 @@ const (
 	msgKindCode                  // code block / generated content
 	msgKindDiff                  // diff preview from a file write confirmation
 	msgKindQuote                 // selected context shown before a branch question
+)
+
+type inputMode int
+
+const (
+	modeNormal inputMode = iota // command mode: v/i/↑↓ active, textarea blurred
+	modeInsert                  // typing mode: all keys go to the textarea
 )
 
 type renderMsg struct {
@@ -228,6 +260,8 @@ type Model struct {
 	lineSelect  bool
 	lineCursor  int
 	lineAnchor  int // -1 = no anchor
+
+	inputMode inputMode
 }
 
 func New() Model {
@@ -421,7 +455,30 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
-		// ── Select mode (runs even during confirming) ─────────────────────────
+		keyStr := msg.String()
+
+		// ── Universal: active in all modes and states ─────────────────────────
+		switch keyStr {
+		case "tab":
+			if m.branchOpen {
+				m.branchFocused = !m.branchFocused
+			}
+			return m, nil
+		case "ctrl+w":
+			if m.branchOpen {
+				if len(m.branchMsgs) > 0 {
+					m.closingBranch = true
+				} else {
+					m.branchOpen = false
+					m.branchFocused = false
+					m.branchHistory = nil
+					m.resizeViewports()
+				}
+			}
+			return m, nil
+		}
+
+		// ── Select mode ───────────────────────────────────────────────────────
 		if m.selecting {
 			msgs := m.mainMsgs
 			if m.selectingBranch {
@@ -431,7 +488,7 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Line-select sub-mode
 			if m.lineSelect && m.selectIdx >= 0 && m.selectIdx < len(msgs) {
 				lines := strings.Split(strings.TrimRight(msgs[m.selectIdx].content, "\n"), "\n")
-				switch msg.String() {
+				switch keyStr {
 				case "up":
 					if m.lineCursor > 0 {
 						m.lineCursor--
@@ -463,6 +520,7 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.selectIdx = -1
 					m.lineCursor = 0
 					m.lineAnchor = -1
+					m.inputMode = modeNormal
 					(&m).refreshSelectView()
 					if m.confirming {
 						m.confirming = false
@@ -486,7 +544,7 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			// Message-select mode
-			switch msg.String() {
+			switch keyStr {
 			case "up":
 				idx := m.selectIdx - 1
 				for idx >= 0 && msgs[idx].kind == msgKindAction {
@@ -519,13 +577,14 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selectIdx = -1
 				m.lineCursor = 0
 				m.lineAnchor = -1
+				m.inputMode = modeNormal
 				(&m).refreshSelectView()
 			}
 			return m, nil
 		}
 
 		if m.confirming {
-			switch msg.String() {
+			switch keyStr {
 			case "y":
 				m.confirming = false
 				m.confirmResponseCh <- true
@@ -545,7 +604,7 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.closingBranch {
-			switch msg.String() {
+			switch keyStr {
 			case "y":
 				m.closingBranch = false
 				m.branchOpen = false
@@ -562,149 +621,149 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.loading {
 			return m, nil
 		}
-		switch msg.String() {
-		case "v":
-			msgs := m.mainMsgs
-			isBranch := m.branchOpen && m.branchFocused
-			if isBranch {
-				msgs = m.branchMsgs
-			}
-			if idx := lastSelectableIdx(msgs); idx >= 0 {
-				m.selecting = true
-				m.selectingBranch = isBranch
-				m.selectIdx = idx
-				(&m).refreshSelectView()
-			}
-			return m, nil
 
-		case "tab":
-			if m.branchOpen {
-				m.branchFocused = !m.branchFocused
-			}
-			return m, nil
-
-		case "ctrl+w":
-			if m.branchOpen {
-				if len(m.branchMsgs) > 0 {
-					m.closingBranch = true
+		// ── Normal mode ───────────────────────────────────────────────────────
+		if m.inputMode == modeNormal {
+			switch keyStr {
+			case "i", "enter":
+				m.inputMode = modeInsert
+				return m, m.input.Focus()
+			case "v":
+				msgs := m.mainMsgs
+				isBranch := m.branchOpen && m.branchFocused
+				if isBranch {
+					msgs = m.branchMsgs
+				}
+				if idx := lastSelectableIdx(msgs); idx >= 0 {
+					m.selecting = true
+					m.selectingBranch = isBranch
+					m.selectIdx = idx
+					(&m).refreshSelectView()
+				}
+			case "up":
+				if m.branchOpen && m.branchFocused {
+					m.branchVP, _ = m.branchVP.Update(msg)
 				} else {
-					m.branchOpen = false
-					m.branchFocused = false
-					m.branchHistory = nil
-					m.resizeViewports()
+					m.mainVP, _ = m.mainVP.Update(msg)
+				}
+			case "down":
+				if m.branchOpen && m.branchFocused {
+					m.branchVP, _ = m.branchVP.Update(msg)
+				} else {
+					m.mainVP, _ = m.mainVP.Update(msg)
 				}
 			}
 			return m, nil
+		}
 
-		default:
-			submitted, handled, inputCmd := m.input.Update(msg)
-			if handled && submitted == "" {
-				// up/down history or empty enter — input bar consumed the key
-				return m, inputCmd
-			}
-			if handled {
-				// user pressed enter with content
-				input := submitted
+		// ── Insert mode ───────────────────────────────────────────────────────
+		if keyStr == "esc" {
+			m.inputMode = modeNormal
+			m.input.Blur()
+			return m, nil
+		}
 
-				// Route to branch if: explicit /branch prefix, or branch pane is focused
-				isBranchMsg := strings.HasPrefix(input, "/branch ") || (m.branchOpen && m.branchFocused)
+		submitted, handled, inputCmd := m.input.Update(msg)
+		if handled && submitted == "" {
+			return m, inputCmd
+		}
+		if handled {
+			input := submitted
 
-				if isBranchMsg {
-					// Resolve the user-visible question (strip /branch prefix if present)
-					displayQ := input
-					if strings.HasPrefix(input, "/branch ") {
-						displayQ = strings.TrimPrefix(input, "/branch ")
-					}
-					// Build agent message — prepend selection context if set
-					agentQ := displayQ
-					if m.branchContext != "" {
-						agentQ = "Regarding:\n\n" + m.branchContext + "\n\n" + displayQ
-						if !m.branchOpen {
-							m.branchOpen = true
-							m.branchFocused = true
-							m.branchHistory = append([]agent.Turn{}, m.mainHistory...)
-							m.resizeViewports()
-						}
-						m.branchMsgs = append(m.branchMsgs, renderMsg{kind: msgKindQuote, content: m.branchContext})
-						m.branchContext = ""
-						(&m).resizeViewports()
-					}
+			isBranchMsg := strings.HasPrefix(input, "/branch ") || (m.branchOpen && m.branchFocused)
+
+			if isBranchMsg {
+				displayQ := input
+				if strings.HasPrefix(input, "/branch ") {
+					displayQ = strings.TrimPrefix(input, "/branch ")
+				}
+				agentQ := displayQ
+				if m.branchContext != "" {
+					agentQ = "Regarding:\n\n" + m.branchContext + "\n\n" + displayQ
 					if !m.branchOpen {
 						m.branchOpen = true
 						m.branchFocused = true
 						m.branchHistory = append([]agent.Turn{}, m.mainHistory...)
 						m.resizeViewports()
 					}
-					m.branchMsgs = append(m.branchMsgs, renderMsg{kind: msgKindUser, content: displayQ})
-					m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width, -1, nil))
-					m.branchVP.GotoBottom()
-					m.loading = true
-					m.loadingBranch = true
-					m.toolCh = make(chan string, 10)
-					branchHistory := m.branchHistory
-					agentRunner := m.ag
-					branchToolCh := m.toolCh
-					agentQuestion := agentQ
-					return m, tea.Batch(
-						waitForTool(branchToolCh),
-						func() tea.Msg {
-							aiText, newHistory, err := agentRunner.Run(branchHistory, agentQuestion, func(toolMsg string) { branchToolCh <- toolMsg }, nil)
-							close(branchToolCh)
-							return sendDoneMsg{userMsg: displayQ, aiMsg: aiText, history: newHistory, isBranch: true, err: err}
-						},
-					)
+					m.branchMsgs = append(m.branchMsgs, renderMsg{kind: msgKindQuote, content: m.branchContext})
+					m.branchContext = ""
+					(&m).resizeViewports()
 				}
-
-				m.mainMsgs = append(m.mainMsgs, renderMsg{kind: msgKindUser, content: input})
-				m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width, -1, nil))
-				m.mainVP.GotoBottom()
+				if !m.branchOpen {
+					m.branchOpen = true
+					m.branchFocused = true
+					m.branchHistory = append([]agent.Turn{}, m.mainHistory...)
+					m.resizeViewports()
+				}
+				m.branchMsgs = append(m.branchMsgs, renderMsg{kind: msgKindUser, content: displayQ})
+				m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width, -1, nil))
+				m.branchVP.GotoBottom()
 				m.loading = true
-				m.loadingBranch = false
+				m.loadingBranch = true
 				m.toolCh = make(chan string, 10)
-				m.confirmMsgCh = make(chan confirmRequestMsg, 1)
-				m.confirmResponseCh = make(chan bool, 1)
-				mainHistory := m.mainHistory
+				branchHistory := m.branchHistory
 				agentRunner := m.ag
-				mainToolCh := m.toolCh
-				mainConfirmMsgCh := m.confirmMsgCh
-				mainConfirmResponseCh := m.confirmResponseCh
-				confirmFn := agent.ConfirmFn(func(name, confirmMsg, preview string) bool {
-					lang := ""
-					if name == "write_file" {
-						path := strings.TrimPrefix(confirmMsg, "writing ")
-						if dotIdx := strings.LastIndex(path, "."); dotIdx >= 0 {
-							lang = strings.ToLower(path[dotIdx+1:])
-						}
-					}
-					mainConfirmMsgCh <- confirmRequestMsg{msg: confirmMsg, preview: preview, lang: lang}
-					return <-mainConfirmResponseCh
-				})
+				branchToolCh := m.toolCh
+				agentQuestion := agentQ
 				return m, tea.Batch(
-					waitForTool(mainToolCh),
-					waitForConfirm(mainConfirmMsgCh),
+					waitForTool(branchToolCh),
 					func() tea.Msg {
-						aiText, newHistory, err := agentRunner.Run(mainHistory, input, func(toolMsg string) { mainToolCh <- toolMsg }, confirmFn)
-						close(mainToolCh)
-						close(mainConfirmMsgCh)
-						return sendDoneMsg{userMsg: input, aiMsg: aiText, history: newHistory, isBranch: false, err: err}
+						aiText, newHistory, err := agentRunner.Run(branchHistory, agentQuestion, func(toolMsg string) { branchToolCh <- toolMsg }, nil)
+						close(branchToolCh)
+						return sendDoneMsg{userMsg: displayQ, aiMsg: aiText, history: newHistory, isBranch: true, err: err}
 					},
 				)
 			}
-			// key was forwarded to textarea inside inputBar.Update — carry its cmd
-			var cmds []tea.Cmd
-			if inputCmd != nil {
-				cmds = append(cmds, inputCmd)
-			}
-			// Only the focused pane receives the key (e.g. up/down to scroll).
-			var viewportCmd tea.Cmd
-			if m.branchOpen && m.branchFocused {
-				m.branchVP, viewportCmd = m.branchVP.Update(msg)
-			} else {
-				m.mainVP, viewportCmd = m.mainVP.Update(msg)
-			}
-			cmds = append(cmds, viewportCmd)
-			return m, tea.Batch(cmds...)
+
+			m.mainMsgs = append(m.mainMsgs, renderMsg{kind: msgKindUser, content: input})
+			m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width, -1, nil))
+			m.mainVP.GotoBottom()
+			m.loading = true
+			m.loadingBranch = false
+			m.toolCh = make(chan string, 10)
+			m.confirmMsgCh = make(chan confirmRequestMsg, 1)
+			m.confirmResponseCh = make(chan bool, 1)
+			mainHistory := m.mainHistory
+			agentRunner := m.ag
+			mainToolCh := m.toolCh
+			mainConfirmMsgCh := m.confirmMsgCh
+			mainConfirmResponseCh := m.confirmResponseCh
+			confirmFn := agent.ConfirmFn(func(name, confirmMsg, preview string) bool {
+				lang := ""
+				if name == "write_file" {
+					path := strings.TrimPrefix(confirmMsg, "writing ")
+					if dotIdx := strings.LastIndex(path, "."); dotIdx >= 0 {
+						lang = strings.ToLower(path[dotIdx+1:])
+					}
+				}
+				mainConfirmMsgCh <- confirmRequestMsg{msg: confirmMsg, preview: preview, lang: lang}
+				return <-mainConfirmResponseCh
+			})
+			return m, tea.Batch(
+				waitForTool(mainToolCh),
+				waitForConfirm(mainConfirmMsgCh),
+				func() tea.Msg {
+					aiText, newHistory, err := agentRunner.Run(mainHistory, input, func(toolMsg string) { mainToolCh <- toolMsg }, confirmFn)
+					close(mainToolCh)
+					close(mainConfirmMsgCh)
+					return sendDoneMsg{userMsg: input, aiMsg: aiText, history: newHistory, isBranch: false, err: err}
+				},
+			)
 		}
+		// key not handled by inputBar — pass to focused viewport
+		var cmds []tea.Cmd
+		if inputCmd != nil {
+			cmds = append(cmds, inputCmd)
+		}
+		var viewportCmd tea.Cmd
+		if m.branchOpen && m.branchFocused {
+			m.branchVP, viewportCmd = m.branchVP.Update(msg)
+		} else {
+			m.mainVP, viewportCmd = m.mainVP.Update(msg)
+		}
+		cmds = append(cmds, viewportCmd)
+		return m, tea.Batch(cmds...)
 	}
 
 	// Non-key events (e.g. mouse wheel): route to the focused viewport only.
@@ -843,15 +902,7 @@ func (m Model) chatView() string {
 		}
 		header = mainH + strings.Repeat(" ", gap) + branchH
 	} else {
-		header = headerStyle.Render("── Tangent")
-	}
-
-	if m.selecting {
-		modeStr := "SELECT"
-		if m.lineSelect {
-			modeStr = "LINE SELECT"
-		}
-		header += selectedStyle.UnsetBackground().Render("  ·  " + modeStr)
+		header = lipgloss.NewStyle().Foreground(lipgloss.Color("#49a352")).Bold(true).Render("── Tangent")
 	}
 
 	var body string
@@ -867,7 +918,7 @@ func (m Model) chatView() string {
 	var hint string
 	switch {
 	case m.err != "":
-		hint = m.err
+		hint = errorStyle.Render(m.err)
 	case m.lineSelect:
 		msgs := m.mainMsgs
 		if m.selectingBranch {
@@ -885,23 +936,27 @@ func (m Model) chatView() string {
 			}
 			linePos += fmt.Sprintf("  ·  %d lines selected", hi-lo+1)
 		}
-		hint = linePos + "   space · anchor   enter · branch   esc · back"
+		hint = selectModeBadge.Render("LINE SELECT") + hintStyle.Render("  "+linePos+"   space · anchor   enter · branch   esc · back")
 	case m.selecting:
-		hint = "↑↓ · navigate   enter · select lines   escape · cancel"
+		hint = selectModeBadge.Render("SELECT") + hintStyle.Render("  ↑↓ · navigate   enter · select lines   esc · cancel")
 	case m.confirming:
-		hint = "  " + m.confirmMsg + "   y · confirm   n · deny   v · select & branch"
+		hint = confirmModeBadge.Render("CONFIRM") + hintStyle.Render("  "+m.confirmMsg+"   y · confirm   n · deny   v · select & branch")
 	case m.closingBranch:
-		hint = "close branch and discard conversation?   y · yes   n · cancel"
+		hint = hintStyle.Render("close branch and discard conversation?   y · yes   n · cancel")
 	case m.loading:
 		if m.toolMsg != "" {
-			hint = "  " + m.toolMsg + "..."
+			hint = hintStyle.Render("  " + m.toolMsg + "...")
 		} else {
-			hint = "  thinking..."
+			hint = hintStyle.Render("  thinking...")
 		}
+	case m.inputMode == modeNormal && m.branchOpen:
+		hint = normalModeBadge.Render("NORMAL") + hintStyle.Render("  i · insert   v · select   tab · switch pane   ctrl+w · close branch   ctrl+c · quit")
+	case m.inputMode == modeNormal:
+		hint = normalModeBadge.Render("NORMAL") + hintStyle.Render("  i · insert   v · select   ↑↓ · scroll   ctrl+c · quit")
 	case m.branchOpen:
-		hint = "enter · send   tab · switch pane   v · select   ctrl+w · close branch   ↑↓ · history   ctrl+c · quit"
+		hint = insertModeBadge.Render("INSERT") + hintStyle.Render("  enter · send   esc · normal   tab · switch pane   ctrl+w · close branch")
 	default:
-		hint = "enter · send   /branch <question> · open branch   v · select   ↑↓ · history   ctrl+c · quit"
+		hint = insertModeBadge.Render("INSERT") + hintStyle.Render("  enter · send   esc · normal   /branch · open branch   ↑↓ · history")
 	}
 
 	parts := []string{header, body}
@@ -912,7 +967,7 @@ func (m Model) chatView() string {
 		}
 		parts = append(parts, hintStyle.Render("  ╌ quoting: "+preview))
 	}
-	parts = append(parts, m.input.View(), hintStyle.Render(hint))
+	parts = append(parts, m.input.View(), hint)
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }
 
