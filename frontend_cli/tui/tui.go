@@ -59,7 +59,6 @@ var (
 	codeMsgStyle = lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
 			BorderForeground(colorDim).
-			Foreground(lipgloss.Color("#ff0000")).
 			Padding(0, 1)
 
 	selectedStyle = lipgloss.NewStyle().
@@ -125,6 +124,7 @@ type toolUpdateMsg string
 type confirmRequestMsg struct {
 	msg     string
 	preview string
+	lang    string // file language for syntax-highlighted diff rendering
 }
 
 func waitForConfirm(ch chan confirmRequestMsg) tea.Cmd {
@@ -168,6 +168,7 @@ const (
 type renderMsg struct {
 	kind    msgKind
 	content string
+	lang    string // language identifier for msgKindCode blocks
 }
 
 // ── Model ─────────────────────────────────────────────────────────────────────
@@ -371,7 +372,7 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.confirmMsg = msg.msg
 		m.confirmPreview = msg.preview
 		if msg.preview != "" {
-			diff := renderMsg{kind: msgKindDiff, content: msg.preview}
+			diff := renderMsg{kind: msgKindDiff, content: msg.preview, lang: msg.lang}
 			if m.loadingBranch {
 				m.branchMsgs = append(m.branchMsgs, diff)
 				m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width, -1, nil))
@@ -663,7 +664,14 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 				mainConfirmMsgCh := m.confirmMsgCh
 				mainConfirmResponseCh := m.confirmResponseCh
 				confirmFn := agent.ConfirmFn(func(name, confirmMsg, preview string) bool {
-					mainConfirmMsgCh <- confirmRequestMsg{msg: confirmMsg, preview: preview}
+					lang := ""
+					if name == "write_file" {
+						path := strings.TrimPrefix(confirmMsg, "writing ")
+						if dotIdx := strings.LastIndex(path, "."); dotIdx >= 0 {
+							lang = strings.ToLower(path[dotIdx+1:])
+						}
+					}
+					mainConfirmMsgCh <- confirmRequestMsg{msg: confirmMsg, preview: preview, lang: lang}
 					return <-mainConfirmResponseCh
 				})
 				return m, tea.Batch(
@@ -903,12 +911,40 @@ func (m Model) chatView() string {
 
 // ── Render helpers ────────────────────────────────────────────────────────────
 
-func renderDiff(diff string) string {
+func renderDiff(diff, lang string) string {
+	lines := strings.Split(diff, "\n")
+
+	// For new-file diffs, every code line starts with "+ ".
+	// Collect the full code, highlight it as one block, then re-split so
+	// chroma has the full context it needs for accurate highlighting.
+	isNewFile := len(lines) > 0 && strings.HasPrefix(lines[0], "new file:")
+	var highlightedCodeLines []string
+	if isNewFile && lang != "" {
+		var codeLines []string
+		for _, line := range lines[1:] {
+			if strings.HasPrefix(line, "+ ") {
+				codeLines = append(codeLines, line[2:])
+			} else if line == "+" {
+				codeLines = append(codeLines, "")
+			}
+		}
+		highlighted := highlightCode(strings.Join(codeLines, "\n"), lang)
+		highlightedCodeLines = strings.Split(highlighted, "\n")
+	}
+
 	var b strings.Builder
-	for _, line := range strings.Split(diff, "\n") {
+	codeLineIdx := 0
+	for _, line := range lines {
 		switch {
+		case strings.HasPrefix(line, "new file:"):
+			b.WriteString(hintStyle.Render(line) + "\n")
 		case strings.HasPrefix(line, "+"):
-			b.WriteString(diffAddStyle.Render(line) + "\n")
+			if isNewFile && codeLineIdx < len(highlightedCodeLines) {
+				b.WriteString(diffAddStyle.Render("+") + " " + highlightedCodeLines[codeLineIdx] + "\n")
+				codeLineIdx++
+			} else {
+				b.WriteString(diffAddStyle.Render(line) + "\n")
+			}
 		case strings.HasPrefix(line, "-"):
 			b.WriteString(diffRemoveStyle.Render(line) + "\n")
 		case strings.HasPrefix(line, "@@"):
@@ -966,17 +1002,18 @@ func renderMessages(msgs []renderMsg, width, selectedIdx int, ls *lineSelectInfo
 			inner := width - 6
 			switch {
 			case sel:
-				style = style.BorderForeground(colorSelect).Foreground(colorSelect).MarginLeft(4)
+				style = style.BorderForeground(colorSelect).MarginLeft(4)
 				inner = width - 8
 			case dim:
-				style = style.BorderForeground(colorDim).Foreground(colorDim).MarginLeft(2)
+				style = style.BorderForeground(colorDim).MarginLeft(2)
 			default:
 				style = style.MarginLeft(2)
 			}
 			if inner < 10 {
 				inner = 10
 			}
-			b.WriteString(style.Width(inner).Render(msg.content) + "\n\n")
+			highlighted := highlightCode(msg.content, msg.lang)
+			b.WriteString(style.Width(inner).Render(highlighted) + "\n\n")
 		case msgKindDiff:
 			style := previewStyle
 			switch {
@@ -985,7 +1022,7 @@ func renderMessages(msgs []renderMsg, width, selectedIdx int, ls *lineSelectInfo
 			case dim:
 				style = style.BorderForeground(colorDim)
 			}
-			b.WriteString(style.Render(strings.TrimRight(renderDiff(msg.content), "\n")) + "\n\n")
+			b.WriteString(style.Render(strings.TrimRight(renderDiff(msg.content, msg.lang), "\n")) + "\n\n")
 		case msgKindQuote:
 			label := hintStyle.Render("  context")
 			content := selectBarStyle.Render(wrapText(msg.content, chatMsgStyle, "", "", width-4))
@@ -996,7 +1033,19 @@ func renderMessages(msgs []renderMsg, width, selectedIdx int, ls *lineSelectInfo
 }
 
 func renderLineSelect(msg renderMsg, width int, ls *lineSelectInfo) string {
-	lines := strings.Split(strings.TrimRight(msg.content, "\n"), "\n")
+	// For code blocks, use syntax-highlighted lines so colors carry through
+	// into the line-select view. Non-code content uses the raw lines.
+	rawLines := strings.Split(strings.TrimRight(msg.content, "\n"), "\n")
+	displayLines := rawLines
+	if msg.kind == msgKindCode {
+		highlighted := highlightCode(msg.content, msg.lang)
+		displayLines = strings.Split(strings.TrimRight(highlighted, "\n"), "\n")
+		// Pad to same length in case chroma produces different line count
+		for len(displayLines) < len(rawLines) {
+			displayLines = append(displayLines, "")
+		}
+	}
+
 	lo, hi := ls.cursor, ls.cursor
 	if ls.anchor >= 0 {
 		lo, hi = ls.anchor, ls.cursor
@@ -1006,7 +1055,7 @@ func renderLineSelect(msg renderMsg, width int, ls *lineSelectInfo) string {
 	}
 
 	var inner strings.Builder
-	for i, line := range lines {
+	for i, line := range displayLines {
 		inRange := i >= lo && i <= hi
 		isCursor := i == ls.cursor
 		switch {
@@ -1017,7 +1066,8 @@ func renderLineSelect(msg renderMsg, width int, ls *lineSelectInfo) string {
 		default:
 			switch msg.kind {
 			case msgKindCode:
-				inner.WriteString(codeLineStyle.Render("  "+line) + "\n")
+				// line already has chroma ANSI colors — no additional style needed
+				inner.WriteString("  " + line + "\n")
 			case msgKindDiff:
 				switch {
 				case strings.HasPrefix(line, "+"):
@@ -1099,12 +1149,14 @@ func parseAIResponse(text string) []renderMsg {
 			continue
 		}
 		if i%2 == 1 {
-			// Inside a code fence — strip the language identifier line
+			// Inside a code fence — extract and preserve the language identifier
+			lang := ""
 			if idx := strings.Index(part, "\n"); idx != -1 {
+				lang = strings.TrimSpace(part[:idx])
 				part = strings.TrimSpace(part[idx+1:])
 			}
 			if part != "" {
-				msgs = append(msgs, renderMsg{kind: msgKindCode, content: part})
+				msgs = append(msgs, renderMsg{kind: msgKindCode, content: part, lang: lang})
 			}
 		} else {
 			msgs = append(msgs, renderMsg{kind: msgKindChat, content: part})
