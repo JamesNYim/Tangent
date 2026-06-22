@@ -29,7 +29,12 @@ var (
 	colorSelect   = lipgloss.Color("#87af87") // selection highlight
 	colorSelectBg = lipgloss.Color("#1a2e1a") // background tint behind selected text
 	colorDim      = lipgloss.Color("#585858") // dimmed borders/text in select mode
+	colorLineBg   = lipgloss.Color("#005f00") // subtle background for line-select highlight (ANSI256 color 22)
 )
+
+// lineBgAnsi256 is the raw ANSI256 index for colorLineBg, used to inject the
+// background into pre-highlighted strings via withLineBg.
+const lineBgAnsi256 = 22
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 
@@ -1088,27 +1093,31 @@ func renderLineSelect(msg renderMsg, width int, ls *lineSelectInfo) string {
 			}
 
 			styledPrefix := prefixStyle.Render(prefixChar)
+			markerStyle := lipgloss.NewStyle().Foreground(colorSelect).Background(colorLineBg).Bold(true)
+			rangeBarStyle := lipgloss.NewStyle().Foreground(colorSelect).Background(colorLineBg)
 			switch {
 			case isCursor:
-				inner.WriteString(selectedStyle.UnsetBackground().Render("▶") + " " + styledPrefix + " " + highlighted + "\n")
+				inner.WriteString(markerStyle.Render("▶") + " " + styledPrefix + " " + withLineBg(highlighted, lineBgAnsi256) + "\n")
 			case inRange:
-				inner.WriteString(lineRangeStyle.UnsetBackground().Render("│") + " " + styledPrefix + " " + highlighted + "\n")
+				inner.WriteString(rangeBarStyle.Render("│") + " " + styledPrefix + " " + withLineBg(highlighted, lineBgAnsi256) + "\n")
 			default:
 				inner.WriteString("  " + styledPrefix + " " + highlighted + "\n")
 			}
 			continue
 		}
 
+		markerStyle := lipgloss.NewStyle().Foreground(colorSelect).Background(colorLineBg).Bold(true)
+		rangeBarStyle := lipgloss.NewStyle().Foreground(colorSelect).Background(colorLineBg)
 		switch {
 		case isCursor:
 			if msg.kind == msgKindCode {
-				inner.WriteString(selectedStyle.UnsetBackground().Render("▶ ") + displayLine + "\n")
+				inner.WriteString(markerStyle.Render("▶ ") + withLineBg(displayLine, lineBgAnsi256) + "\n")
 			} else {
 				inner.WriteString(selectedStyle.Render("▶ "+displayLine) + "\n")
 			}
 		case inRange:
 			if msg.kind == msgKindCode {
-				inner.WriteString(lineRangeStyle.UnsetBackground().Render("│ ") + displayLine + "\n")
+				inner.WriteString(rangeBarStyle.Render("│ ") + withLineBg(displayLine, lineBgAnsi256) + "\n")
 			} else {
 				inner.WriteString(lineRangeStyle.Render("  "+displayLine) + "\n")
 			}

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	chromaHighlight "github.com/alecthomas/chroma/v2"
@@ -52,4 +53,16 @@ func highlightCode(code, lang string) string {
 	result := neutralFg + strings.ReplaceAll(buf.String(), ansiReset, neutralFg)
 
 	return strings.TrimRight(result, "\n")
+}
+
+// withLineBg injects an ANSI256 background color into a pre-highlighted string
+// so the background persists across token reset boundaries. This is the same
+// technique used for the neutral foreground fix above — chroma's \033[0m resets
+// clear the background, so we re-apply it after every reset.
+// A background reset (\033[49m) is appended at the end so the color does not
+// bleed into the next line.
+func withLineBg(highlighted string, bgAnsi256 int) string {
+	bgCode := fmt.Sprintf("\033[48;5;%dm", bgAnsi256)
+	result := bgCode + strings.ReplaceAll(highlighted, "\033[0m", "\033[0m"+bgCode)
+	return result + "\033[49m"
 }
