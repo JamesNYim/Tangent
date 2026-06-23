@@ -208,15 +208,29 @@ type renderMsg struct {
 	lang    string // language identifier for msgKindCode blocks
 }
 
+// ── Per-pane modal state ──────────────────────────────────────────────────────
+
+type paneState struct {
+	loading           bool
+	confirming        bool
+	confirmMsg        string
+	confirmPreview    string
+	confirmMsgCh      chan confirmRequestMsg
+	confirmResponseCh chan bool
+	toolCh            chan string
+	toolMsg           string
+}
+
 // ── Model ─────────────────────────────────────────────────────────────────────
 
 type Model struct {
-	state   appState
-	width   int
-	height  int
-	loading bool
-	toolMsg string
-	err     string
+	state appState
+	width int
+	height int
+	err   string
+
+	mainPane   paneState
+	branchPane paneState
 
 	// setup
 	providerIdx  int
@@ -236,16 +250,7 @@ type Model struct {
 	branchMsgs    []renderMsg
 	branchVP      viewport.Model
 
-	// tool confirm
-	confirming        bool
-	confirmMsg        string
-	confirmPreview    string
-	confirmMsgCh      chan confirmRequestMsg
-	confirmResponseCh chan bool
-
-	input         inputBar
-	toolCh        chan string
-	loadingBranch bool
+	input inputBar
 
 	// branch close confirmation
 	closingBranch bool
@@ -393,65 +398,71 @@ func (m Model) updateSetup(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case toolUpdateMsg:
-		m.toolMsg = string(msg)
 		action := renderMsg{kind: msgKindAction, content: string(msg)}
-		if m.loadingBranch {
+		if m.branchPane.loading {
+			m.branchPane.toolMsg = string(msg)
 			m.branchMsgs = append(m.branchMsgs, action)
 			m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width, -1, nil))
 			m.branchVP.GotoBottom()
-		} else {
-			m.mainMsgs = append(m.mainMsgs, action)
-			m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width, -1, nil))
-			m.mainVP.GotoBottom()
+			return m, waitForTool(m.branchPane.toolCh)
 		}
-		return m, waitForTool(m.toolCh)
+		m.mainPane.toolMsg = string(msg)
+		m.mainMsgs = append(m.mainMsgs, action)
+		m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width, -1, nil))
+		m.mainVP.GotoBottom()
+		return m, waitForTool(m.mainPane.toolCh)
 
 	case confirmRequestMsg:
-		m.confirming = true
-		m.confirmMsg = msg.msg
-		m.confirmPreview = msg.preview
+		m.mainPane.confirming = true
+		m.mainPane.confirmMsg = msg.msg
+		m.mainPane.confirmPreview = msg.preview
 		if msg.preview != "" {
 			diff := renderMsg{kind: msgKindDiff, content: msg.preview, lang: msg.lang}
-			if m.loadingBranch {
-				m.branchMsgs = append(m.branchMsgs, diff)
-				m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width, -1, nil))
-				m.branchVP.GotoBottom()
-			} else {
-				m.mainMsgs = append(m.mainMsgs, diff)
-				m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width, -1, nil))
-				m.mainVP.GotoBottom()
-			}
+			m.mainMsgs = append(m.mainMsgs, diff)
+			m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width, -1, nil))
+			m.mainVP.GotoBottom()
 		}
 		return m, nil
 
 	case sendDoneMsg:
-		m.loading = false
-		m.toolMsg = ""
-		m.toolCh = nil
-		m.confirming = false
-		m.confirmMsg = ""
-		m.confirmPreview = ""
-		m.confirmMsgCh = nil
-		m.confirmResponseCh = nil
+		if msg.isBranch {
+			m.branchPane.loading = false
+			m.branchPane.toolMsg = ""
+			m.branchPane.toolCh = nil
+			if msg.err != nil {
+				m.err = msg.err.Error()
+			} else {
+				m.err = ""
+				aiMsgs := parseAIResponse(msg.aiMsg)
+				m.branchHistory = msg.history
+				m.branchMsgs = append(m.branchMsgs, aiMsgs...)
+				m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width, -1, nil))
+				m.branchVP.GotoBottom()
+			}
+			// If main is still running, resume listening to its toolCh.
+			if m.mainPane.loading {
+				return m, waitForTool(m.mainPane.toolCh)
+			}
+			return m, nil
+		}
+		m.mainPane.loading = false
+		m.mainPane.toolMsg = ""
+		m.mainPane.toolCh = nil
+		m.mainPane.confirming = false
+		m.mainPane.confirmMsg = ""
+		m.mainPane.confirmPreview = ""
+		m.mainPane.confirmMsgCh = nil
+		m.mainPane.confirmResponseCh = nil
 		if msg.err != nil {
 			m.err = msg.err.Error()
 			return m, nil
 		}
 		m.err = ""
-		m.loadingBranch = false
 		aiMsgs := parseAIResponse(msg.aiMsg)
-
-		if msg.isBranch {
-			m.branchHistory = msg.history
-			m.branchMsgs = append(m.branchMsgs, aiMsgs...)
-			m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width, -1, nil))
-			m.branchVP.GotoBottom()
-		} else {
-			m.mainHistory = msg.history
-			m.mainMsgs = append(m.mainMsgs, aiMsgs...)
-			m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width, -1, nil))
-			m.mainVP.GotoBottom()
-		}
+		m.mainHistory = msg.history
+		m.mainMsgs = append(m.mainMsgs, aiMsgs...)
+		m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width, -1, nil))
+		m.mainVP.GotoBottom()
 		return m, nil
 
 	case tea.KeyMsg:
@@ -526,10 +537,6 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.lineAnchor = -1
 					m.inputMode = modeInsert
 					(&m).refreshSelectView()
-					if m.confirming {
-						m.confirming = false
-						m.confirmResponseCh <- false
-					}
 					if !m.branchOpen {
 						m.branchOpen = true
 						m.branchFocused = true
@@ -591,16 +598,16 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if m.confirming {
+		if m.mainPane.confirming && !m.branchFocused {
 			switch keyStr {
 			case "y":
-				m.confirming = false
-				m.confirmResponseCh <- true
-				return m, waitForConfirm(m.confirmMsgCh)
+				m.mainPane.confirming = false
+				m.mainPane.confirmResponseCh <- true
+				return m, waitForConfirm(m.mainPane.confirmMsgCh)
 			case "n":
-				m.confirming = false
-				m.confirmResponseCh <- false
-				return m, waitForConfirm(m.confirmMsgCh)
+				m.mainPane.confirming = false
+				m.mainPane.confirmResponseCh <- false
+				return m, waitForConfirm(m.mainPane.confirmMsgCh)
 			case "v":
 				if idx := lastSelectableIdx(m.mainMsgs); idx >= 0 {
 					m.selecting = true
@@ -627,7 +634,8 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if m.loading {
+		// Block input only when the focused pane is loading.
+		if (m.mainPane.loading && !m.branchFocused) || (m.branchPane.loading && m.branchFocused) {
 			return m, nil
 		}
 
@@ -700,12 +708,11 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.branchMsgs = append(m.branchMsgs, renderMsg{kind: msgKindUser, content: displayQ})
 				m.branchVP.SetContent(renderMessages(m.branchMsgs, m.branchVP.Width, -1, nil))
 				m.branchVP.GotoBottom()
-				m.loading = true
-				m.loadingBranch = true
-				m.toolCh = make(chan string, 10)
+				m.branchPane.loading = true
+				m.branchPane.toolCh = make(chan string, 10)
 				branchHistory := m.branchHistory
 				agentRunner := m.ag
-				branchToolCh := m.toolCh
+				branchToolCh := m.branchPane.toolCh
 				agentQuestion := agentQ
 				return m, tea.Batch(
 					waitForTool(branchToolCh),
@@ -720,16 +727,15 @@ func (m Model) updateChat(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mainMsgs = append(m.mainMsgs, renderMsg{kind: msgKindUser, content: input})
 			m.mainVP.SetContent(renderMessages(m.mainMsgs, m.mainVP.Width, -1, nil))
 			m.mainVP.GotoBottom()
-			m.loading = true
-			m.loadingBranch = false
-			m.toolCh = make(chan string, 10)
-			m.confirmMsgCh = make(chan confirmRequestMsg, 1)
-			m.confirmResponseCh = make(chan bool, 1)
+			m.mainPane.loading = true
+			m.mainPane.toolCh = make(chan string, 10)
+			m.mainPane.confirmMsgCh = make(chan confirmRequestMsg, 1)
+			m.mainPane.confirmResponseCh = make(chan bool, 1)
 			mainHistory := m.mainHistory
 			agentRunner := m.ag
-			mainToolCh := m.toolCh
-			mainConfirmMsgCh := m.confirmMsgCh
-			mainConfirmResponseCh := m.confirmResponseCh
+			mainToolCh := m.mainPane.toolCh
+			mainConfirmMsgCh := m.mainPane.confirmMsgCh
+			mainConfirmResponseCh := m.mainPane.confirmResponseCh
 			confirmFn := agent.ConfirmFn(func(name, confirmMsg, preview string) bool {
 				lang := ""
 				if name == "write_file" {
@@ -941,13 +947,13 @@ func (m Model) chatView() string {
 		hint = selectModeBadge.Render("LINE SELECT") + hintStyle.Render("  "+linePos+"   space · anchor   enter · branch   esc · back")
 	case m.selecting:
 		hint = selectModeBadge.Render("SELECT") + hintStyle.Render("  ↑↓ · navigate   enter · select lines   esc · cancel")
-	case m.confirming:
-		hint = confirmModeBadge.Render("CONFIRM") + hintStyle.Render("  "+m.confirmMsg+"   y · confirm   n · deny   v · select & branch")
+	case m.mainPane.confirming && !m.branchFocused:
+		hint = confirmModeBadge.Render("CONFIRM") + hintStyle.Render("  "+m.mainPane.confirmMsg+"   y · confirm   n · deny   v · select & branch")
 	case m.closingBranch:
 		hint = hintStyle.Render("close branch and discard conversation?   y · yes   n · cancel")
-	case m.loading:
-		if m.toolMsg != "" {
-			hint = hintStyle.Render("  " + m.toolMsg + "...")
+	case m.mainPane.loading && !m.branchFocused:
+		if m.mainPane.toolMsg != "" {
+			hint = hintStyle.Render("  " + m.mainPane.toolMsg + "...")
 		} else {
 			hint = hintStyle.Render("  thinking...")
 		}
