@@ -12,7 +12,7 @@ import ChatPage from "./pages/ChatPage";
 
 export default function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/Tangent">
       <AuthProvider>
         <Routes>
           <Route path="*" element={<div>404</div>} />
