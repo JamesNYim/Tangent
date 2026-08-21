@@ -16,7 +16,9 @@ app = FastAPI(title="Tangent API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        "http://localhost:5173", 
+        "http://localhost:5173",
+        "https://jamesnyim.com",
+        "https://www.jamesnyim.com",
         "https://tangent-sand.vercel.app",
         "https://tangent-hj2brma7o-jamesnyims-projects.vercel.app",
         "https://tangentai.xyz",
