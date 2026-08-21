@@ -1,5 +1,5 @@
 # Tangent — Branching AI Conversations
-### tangentai.xyz
+### JamesNYim.com/Tangent/
 ## Overview
 
 Tangent is a new way to interact with AI — built for thinking, not just chatting.
